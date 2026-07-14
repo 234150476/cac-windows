@@ -87,8 +87,21 @@ function Get-CurrentEnv {
 
 function Find-RealClaude {
     $paths = $env:PATH -split ";" | Where-Object { $_ -notlike "*\.cac\bin*" }
-    foreach ($p in $paths) {
-        $candidate = Join-Path $p "claude.exe"
+    # Check for claude.exe first, then extensionless claude (SEA binary)
+    foreach ($name in @("claude.exe", "claude")) {
+        foreach ($p in $paths) {
+            $candidate = Join-Path $p $name
+            if (Test-Path $candidate) {
+                # Skip shim scripts (.cmd/.ps1) — we need the real binary
+                if ($candidate -match '\.(cmd|ps1|sh)$') { continue }
+                return $candidate
+            }
+        }
+    }
+    # Fallback: check known npm install location directly
+    $npmBin = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\bin"
+    foreach ($name in @("claude.exe", "claude")) {
+        $candidate = Join-Path $npmBin $name
         if (Test-Path $candidate) { return $candidate }
     }
     return $null

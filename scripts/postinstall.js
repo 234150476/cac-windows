@@ -10,6 +10,54 @@ var cacDir = path.join(home, '.cac');
 // Ensure cac is executable
 try { fs.chmodSync(cacBin, 0o755); } catch (e) {}
 
+// Windows: override npm-generated shims (cac.cmd, cac.ps1) to use PowerShell version.
+// npm auto-generates shims that call `bash cac`, but on Windows the system `bash`
+// may point to WSL which can't resolve Windows paths. Our cac.ps1 is the native
+// Windows entry point, so we make the shims call it directly.
+if (process.platform === 'win32') {
+  try {
+    var npmBin = path.dirname(process.env.npm_node_execpath
+      ? path.join(path.dirname(process.env.npm_node_execpath), '..', 'bin')
+      : '');
+    // Find the npm global bin dir by locating where our shim lives
+    var shimCmd = path.join(pkgDir, '..', '..', 'cac.cmd');
+    if (!fs.existsSync(shimCmd)) {
+      // Fallback: npm prefix
+      var spawnSync = require('child_process').spawnSync;
+      var result = spawnSync('npm', ['prefix', '-g'], { encoding: 'utf8', shell: true });
+      if (result.stdout) {
+        shimCmd = path.join(result.stdout.trim(), 'cac.cmd');
+      }
+    }
+    if (fs.existsSync(shimCmd)) {
+      var shimDir = path.dirname(shimCmd);
+      var cacPs1Src = path.join(pkgDir, 'cac.ps1');
+      if (fs.existsSync(cacPs1Src)) {
+        // cac.cmd → tries pwsh first, falls back to powershell.exe
+        fs.writeFileSync(path.join(shimDir, 'cac.cmd'), [
+          '@echo off',
+          'where pwsh >nul 2>&1 && (',
+          '    pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\claude-cac\\cac.ps1" %*',
+          '    exit /b %ERRORLEVEL%',
+          ')',
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\claude-cac\\cac.ps1" %*',
+          ''
+        ].join('\r\n'));
+        // cac.ps1 shim
+        fs.writeFileSync(path.join(shimDir, 'cac.ps1'), [
+          '#!/usr/bin/env pwsh',
+          '$cacDir = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "node_modules\\claude-cac"',
+          '& pwsh -NoProfile -ExecutionPolicy Bypass -File "$cacDir\\cac.ps1" @args',
+          'exit $LASTEXITCODE',
+          ''
+        ].join('\n'));
+      }
+    }
+  } catch (e) {
+    // Non-fatal — user can manually run: pwsh cac.ps1
+  }
+}
+
 // Auto-sync runtime files on install/upgrade
 // Pure Node.js — no bash/zsh dependency
 // Ensures bug fixes (dns-guard, relay, fingerprint-hook) take effect immediately
@@ -96,7 +144,8 @@ try {
 
 // Trigger _ensure_initialized to fully regenerate wrapper to current version.
 // cac env ls now calls _require_setup (fixed in 1.4.3+).
-if (home) {
+// Skip on Windows — the bash cac script can't run; user runs `cac setup` manually.
+if (home && process.platform !== 'win32') {
   try {
     var spawnSync = require('child_process').spawnSync;
     spawnSync(cacBin, ['env', 'ls'], {
@@ -109,15 +158,77 @@ if (home) {
   }
 }
 
-console.log([
+// Patch claude.exe date function to respect TZ environment variable.
+// Claude Code's SEA binary uses `new Date` which reads Windows system timezone,
+// ignoring the TZ env var that cac sets per-environment. This patch replaces the
+// date formatting function (byo) to use Intl.DateTimeFormat with process.env.TZ,
+// so the system prompt "Today's date is YYYY-MM-DD" matches the proxy exit timezone.
+// The replacement is byte-exact same length — no binary layout changes.
+try {
+  var claudeExePaths = [];
+  // Check common install locations
+  var npmPrefix = process.env.npm_config_prefix || path.join(home, 'AppData', 'Roaming', 'npm');
+  var candidates = [
+    path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe'),
+    path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude'),
+  ];
+  for (var ci = 0; ci < candidates.length; ci++) {
+    if (fs.existsSync(candidates[ci])) claudeExePaths.push(candidates[ci]);
+  }
+
+  var BYO_ORIGINAL = 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}';
+  var BYO_PATCHED  = 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }';
+
+  for (var pi = 0; pi < claudeExePaths.length; pi++) {
+    var exePath = claudeExePaths[pi];
+    var exeBytes = fs.readFileSync(exePath);
+    var exeText = exeBytes.toString('latin1');
+
+    // Already patched?
+    if (exeText.indexOf(BYO_PATCHED) !== -1) continue;
+
+    var byoIdx = exeText.indexOf(BYO_ORIGINAL);
+    if (byoIdx === -1) continue; // Version changed or already different
+
+    // Backup (only if no backup exists yet)
+    var bakPath = exePath + '.bak';
+    if (!fs.existsSync(bakPath)) {
+      fs.copyFileSync(exePath, bakPath);
+    }
+
+    // Patch in place
+    var patchBuf = Buffer.from(BYO_PATCHED, 'latin1');
+    patchBuf.copy(exeBytes, byoIdx);
+    fs.writeFileSync(exePath, exeBytes);
+  }
+} catch (e) {
+  // Non-fatal — TZ patch is optional; cac works without it (system timezone is used)
+}
+
+var quickStart = [
   '',
   '  claude-cac installed successfully',
-  '',
-  '  Quick start:',
-  '    cac env create <name> [-p <proxy>]   Create an isolated environment',
-  '    cac <name>                           Switch environment',
-  '    claude                               Start Claude Code',
+  ''
+];
+if (process.platform === 'win32') {
+  quickStart.push(
+    '  Quick start (Windows):',
+    '    cac setup                             First-time setup',
+    '    cac env create <name> [-p <proxy>]    Create an isolated environment',
+    '    cac <name>                            Switch environment',
+    '    claude                                Start Claude Code'
+  );
+} else {
+  quickStart.push(
+    '  Quick start:',
+    '    cac env create <name> [-p <proxy>]   Create an isolated environment',
+    '    cac <name>                           Switch environment',
+    '    claude                               Start Claude Code'
+  );
+}
+quickStart.push(
   '',
   '  Docs: https://cac.nextmind.space/docs',
   ''
-].join('\n'));
+);
+console.log(quickStart.join('\n'));

@@ -303,7 +303,7 @@ _env_cmd_set() {
     # Parse: cac env set [name] <key> <value|--remove>
     # If first arg is a known key, use current env; otherwise treat as env name
     local name="" key="" value="" remove=false
-    local known_keys="proxy version telemetry persona"
+    local known_keys="proxy version telemetry persona tz lang"
 
     if [[ $# -lt 1 ]] || [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "help" ]]; then
         echo
@@ -316,6 +316,8 @@ _env_cmd_set() {
         echo "                                                          Telemetry blocking: stealth (1p_events only), paranoid (max), transparent (none)"
         echo "    $(_green "set") [name] persona <macos-vscode|macos-cursor|macos-iterm|linux-desktop|--remove>"
         echo "                                                          Terminal preset: inject desktop env vars, hide Docker signals (for containers)"
+        echo "    $(_green "set") [name] tz <timezone>                      Timezone (e.g. Pacific/Honolulu, America/New_York)"
+        echo "    $(_green "set") [name] lang <locale>                      Locale (e.g. en_US.UTF-8, ja_JP.UTF-8)"
         echo
         echo "  $(_dim "If name is omitted, uses the current active environment.")"
         echo
@@ -397,8 +399,20 @@ _env_cmd_set() {
                 echo "$(_green_bold "Set") persona for $(_bold "$name") → $(_cyan "$value")"
             fi
             ;;
+        tz)
+            [[ "$remove" != "true" ]] || _die "cannot remove timezone — set a new value instead"
+            [[ -n "$value" ]] || _die "usage: cac env set [name] tz <timezone>\n  examples: Pacific/Honolulu, America/New_York, Asia/Tokyo"
+            echo "$value" > "$env_dir/tz"
+            echo "$(_green_bold "Set") timezone for $(_bold "$name") → $(_cyan "$value")"
+            ;;
+        lang)
+            [[ "$remove" != "true" ]] || _die "cannot remove locale — set a new value instead"
+            [[ -n "$value" ]] || _die "usage: cac env set [name] lang <locale>\n  examples: en_US.UTF-8, ja_JP.UTF-8, zh_TW.UTF-8"
+            echo "$value" > "$env_dir/lang"
+            echo "$(_green_bold "Set") locale for $(_bold "$name") → $(_cyan "$value")"
+            ;;
         *)
-            _die "unknown key '$key' — use proxy, version, telemetry, or persona"
+            _die "unknown key '$key' — use proxy, version, telemetry, persona, tz, or lang"
             ;;
     esac
 }

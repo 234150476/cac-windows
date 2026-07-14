@@ -46,6 +46,9 @@
   "os": [
     "win32"
   ],
+  "peerDependencies": {
+    "@anthropic-ai/claude-code": "2.1.202"
+  },
   "engines": {
     "node": ">=14.0.0"
   }

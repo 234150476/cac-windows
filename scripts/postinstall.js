@@ -164,6 +164,9 @@ if (home && process.platform !== 'win32') {
 // date formatting function (byo) to use Intl.DateTimeFormat with process.env.TZ,
 // so the system prompt "Today's date is YYYY-MM-DD" matches the proxy exit timezone.
 // The replacement is byte-exact same length — no binary layout changes.
+// IMPORTANT: This patch is verified against Claude Code 2.1.202. Other versions
+// may have a different byo() signature and will be skipped with a warning.
+var SUPPORTED_CLAUDE_VERSION = '2.1.202';
 try {
   var claudeExePaths = [];
   // Check common install locations
@@ -188,7 +191,16 @@ try {
     if (exeText.indexOf(BYO_PATCHED) !== -1) continue;
 
     var byoIdx = exeText.indexOf(BYO_ORIGINAL);
-    if (byoIdx === -1) continue; // Version changed or already different
+    if (byoIdx === -1) {
+      // Signature mismatch — warn user
+      console.log('');
+      console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — claude binary signature mismatch.');
+      console.log('  The TZ timezone patch is verified for Claude Code ' + SUPPORTED_CLAUDE_VERSION + '.');
+      console.log('  To use TZ alignment, install the supported version:');
+      console.log('    npm i -g @anthropic-ai/claude-code@' + SUPPORTED_CLAUDE_VERSION);
+      console.log('');
+      continue;
+    }
 
     // Backup (only if no backup exists yet)
     var bakPath = exePath + '.bak';

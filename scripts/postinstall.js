@@ -43,14 +43,14 @@ if (process.platform === 'win32') {
           'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\claude-cac\\cac.ps1" %*',
           ''
         ].join('\r\n'));
-        // cac.ps1 shim
+        // cac.ps1 shim — tries pwsh first, falls back to powershell.exe
         fs.writeFileSync(path.join(shimDir, 'cac.ps1'), [
-          '#!/usr/bin/env pwsh',
           '$cacDir = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "node_modules\\claude-cac"',
-          '& pwsh -NoProfile -ExecutionPolicy Bypass -File "$cacDir\\cac.ps1" @args',
+          '$ps = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell.exe" }',
+          '& $ps -NoProfile -ExecutionPolicy Bypass -File "$cacDir\\cac.ps1" @args',
           'exit $LASTEXITCODE',
           ''
-        ].join('\n'));
+        ].join('\r\n'));
       }
     }
   } catch (e) {

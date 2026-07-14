@@ -158,6 +158,21 @@ if (home && process.platform !== 'win32') {
   }
 }
 
+// Ensure Claude Code's install.cjs has run (extracts the SEA binary).
+// Newer npm versions block postinstall via allow-scripts, so claude.exe may not exist.
+if (process.platform === 'win32') {
+  try {
+    var npmPrefix = process.env.npm_config_prefix || path.join(home, 'AppData', 'Roaming', 'npm');
+    var ccBinDir = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'bin');
+    var ccInstall = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'install.cjs');
+    var hasExe = fs.existsSync(path.join(ccBinDir, 'claude.exe')) || fs.existsSync(path.join(ccBinDir, 'claude'));
+    if (!hasExe && fs.existsSync(ccInstall)) {
+      console.log('  Claude Code install.cjs not yet run (blocked by allow-scripts?) — running now...');
+      require('child_process').spawnSync(process.execPath, [ccInstall], { stdio: 'inherit', timeout: 30000 });
+    }
+  } catch (e) { /* non-fatal */ }
+}
+
 // Patch claude.exe date function to respect TZ environment variable.
 // Claude Code's SEA binary uses `new Date` which reads Windows system timezone,
 // ignoring the TZ env var that cac sets per-environment. This patch replaces the

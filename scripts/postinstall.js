@@ -158,78 +158,95 @@ if (home && process.platform !== 'win32') {
   }
 }
 
-// Ensure Claude Code's install.cjs has run (extracts the SEA binary).
-// Newer npm versions block postinstall via allow-scripts, so claude.exe may not exist.
+// ── Windows: ensure correct Claude Code version is installed and patched ──
+// Handles three cases automatically:
+//   1. Claude Code not installed → install pinned version
+//   2. Claude Code wrong version → reinstall pinned version
+//   3. install.cjs not run (allow-scripts blocked) → run it
+//   4. TZ patch not applied → apply it
+var SUPPORTED_CLAUDE_VERSION = '2.1.202';
+var CC_PKG = '@anthropic-ai/claude-code';
 if (process.platform === 'win32') {
+  var spawnSync = require('child_process').spawnSync;
+  var npmPrefix = process.env.npm_config_prefix || path.join(home, 'AppData', 'Roaming', 'npm');
+  var ccDir = path.join(npmPrefix, 'node_modules', CC_PKG);
+  var ccBinDir = path.join(ccDir, 'bin');
+  var ccInstall = path.join(ccDir, 'install.cjs');
+  var ccPkgJson = path.join(ccDir, 'package.json');
+
+  // Step 1: Check if Claude Code is installed at the correct version
+  var needInstall = false;
+  if (!fs.existsSync(ccPkgJson)) {
+    console.log('  Claude Code not found — installing v' + SUPPORTED_CLAUDE_VERSION + '...');
+    needInstall = true;
+  } else {
+    try {
+      var ccVersion = JSON.parse(fs.readFileSync(ccPkgJson, 'utf8')).version;
+      if (ccVersion !== SUPPORTED_CLAUDE_VERSION) {
+        console.log('  Claude Code v' + ccVersion + ' detected — switching to v' + SUPPORTED_CLAUDE_VERSION + ' (TZ patch requires this version)...');
+        needInstall = true;
+      }
+    } catch (e) { needInstall = true; }
+  }
+
+  if (needInstall) {
+    var installResult = spawnSync('npm', ['install', '-g', CC_PKG + '@' + SUPPORTED_CLAUDE_VERSION,
+      '--registry', 'https://registry.npmjs.org'], {
+      encoding: 'utf8', shell: true, stdio: 'inherit', timeout: 120000
+    });
+    if (installResult.status !== 0) {
+      console.log('  \x1b[33m⚠ Claude Code install failed\x1b[0m — install manually:');
+      console.log('    npm i -g ' + CC_PKG + '@' + SUPPORTED_CLAUDE_VERSION);
+    }
+  }
+
+  // Step 2: Ensure install.cjs has run (extracts the SEA binary)
   try {
-    var npmPrefix = process.env.npm_config_prefix || path.join(home, 'AppData', 'Roaming', 'npm');
-    var ccBinDir = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'bin');
-    var ccInstall = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'install.cjs');
     var hasExe = fs.existsSync(path.join(ccBinDir, 'claude.exe')) || fs.existsSync(path.join(ccBinDir, 'claude'));
     if (!hasExe && fs.existsSync(ccInstall)) {
-      console.log('  Claude Code install.cjs not yet run (blocked by allow-scripts?) — running now...');
-      require('child_process').spawnSync(process.execPath, [ccInstall], { stdio: 'inherit', timeout: 30000 });
+      console.log('  Running Claude Code install.cjs (blocked by allow-scripts)...');
+      spawnSync(process.execPath, [ccInstall], { stdio: 'inherit', timeout: 30000 });
     }
   } catch (e) { /* non-fatal */ }
-}
 
-// Patch claude.exe date function to respect TZ environment variable.
-// Claude Code's SEA binary uses `new Date` which reads Windows system timezone,
-// ignoring the TZ env var that cac sets per-environment. This patch replaces the
-// date formatting function (byo) to use Intl.DateTimeFormat with process.env.TZ,
-// so the system prompt "Today's date is YYYY-MM-DD" matches the proxy exit timezone.
-// The replacement is byte-exact same length — no binary layout changes.
-// IMPORTANT: This patch is verified against Claude Code 2.1.202. Other versions
-// may have a different byo() signature and will be skipped with a warning.
-var SUPPORTED_CLAUDE_VERSION = '2.1.202';
-try {
-  var claudeExePaths = [];
-  // Check common install locations
-  var npmPrefix = process.env.npm_config_prefix || path.join(home, 'AppData', 'Roaming', 'npm');
-  var candidates = [
-    path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe'),
-    path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude'),
-  ];
-  for (var ci = 0; ci < candidates.length; ci++) {
-    if (fs.existsSync(candidates[ci])) claudeExePaths.push(candidates[ci]);
-  }
-
-  var BYO_ORIGINAL = 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}';
-  var BYO_PATCHED  = 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }';
-
-  for (var pi = 0; pi < claudeExePaths.length; pi++) {
-    var exePath = claudeExePaths[pi];
-    var exeBytes = fs.readFileSync(exePath);
-    var exeText = exeBytes.toString('latin1');
-
-    // Already patched?
-    if (exeText.indexOf(BYO_PATCHED) !== -1) continue;
-
-    var byoIdx = exeText.indexOf(BYO_ORIGINAL);
-    if (byoIdx === -1) {
-      // Signature mismatch — warn user
-      console.log('');
-      console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — claude binary signature mismatch.');
-      console.log('  The TZ timezone patch is verified for Claude Code ' + SUPPORTED_CLAUDE_VERSION + '.');
-      console.log('  To use TZ alignment, install the supported version:');
-      console.log('    npm i -g @anthropic-ai/claude-code@' + SUPPORTED_CLAUDE_VERSION);
-      console.log('');
-      continue;
+  // Step 3: Apply TZ patch
+  try {
+    var claudeExePaths = [];
+    var exeCandidates = [
+      path.join(ccBinDir, 'claude.exe'),
+      path.join(ccBinDir, 'claude'),
+    ];
+    for (var ci = 0; ci < exeCandidates.length; ci++) {
+      if (fs.existsSync(exeCandidates[ci])) claudeExePaths.push(exeCandidates[ci]);
     }
 
-    // Backup (only if no backup exists yet)
-    var bakPath = exePath + '.bak';
-    if (!fs.existsSync(bakPath)) {
-      fs.copyFileSync(exePath, bakPath);
-    }
+    var BYO_ORIGINAL = 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}';
+    var BYO_PATCHED  = 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }';
 
-    // Patch in place
-    var patchBuf = Buffer.from(BYO_PATCHED, 'latin1');
-    patchBuf.copy(exeBytes, byoIdx);
-    fs.writeFileSync(exePath, exeBytes);
+    for (var pi = 0; pi < claudeExePaths.length; pi++) {
+      var exePath = claudeExePaths[pi];
+      var exeBytes = fs.readFileSync(exePath);
+      var exeText = exeBytes.toString('latin1');
+
+      if (exeText.indexOf(BYO_PATCHED) !== -1) { continue; } // already patched
+
+      var byoIdx = exeText.indexOf(BYO_ORIGINAL);
+      if (byoIdx === -1) {
+        console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — binary signature mismatch (expected v' + SUPPORTED_CLAUDE_VERSION + ').');
+        continue;
+      }
+
+      var bakPath = exePath + '.bak';
+      if (!fs.existsSync(bakPath)) { fs.copyFileSync(exePath, bakPath); }
+
+      var patchBuf = Buffer.from(BYO_PATCHED, 'latin1');
+      patchBuf.copy(exeBytes, byoIdx);
+      fs.writeFileSync(exePath, exeBytes);
+      console.log('  \x1b[32m✓ TZ patch applied\x1b[0m');
+    }
+  } catch (e) {
+    // Non-fatal — TZ patch is optional; cac works without it
   }
-} catch (e) {
-  // Non-fatal — TZ patch is optional; cac works without it (system timezone is used)
 }
 
 var quickStart = [

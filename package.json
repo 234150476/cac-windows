@@ -1,7 +1,7 @@
 {
-  "name": "claude-cac",
-  "version": "1.5.7",
-  "description": "Isolate, protect, and manage your Claude Code — versions, environments, identity, and proxy.",
+  "name": "cac-windows",
+  "version": "1.0.0",
+  "description": "Claude Code Windows environment manager — identity isolation, fingerprint spoofing, timezone alignment.",
   "bin": {
     "cac": "cac"
   },
@@ -27,22 +27,23 @@
     "proxy",
     "telemetry",
     "fingerprint",
+    "windows",
+    "powershell",
+    "timezone",
     "cloak",
     "cli"
   ],
-  "author": "nmhjklnm",
+  "author": "234150476",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nmhjklnm/cac.git"
+    "url": "git+https://github.com/234150476/cac-windows.git"
   },
-  "homepage": "https://cac.nextmind.space/docs",
+  "homepage": "https://github.com/234150476/cac-windows",
   "bugs": {
-    "url": "https://github.com/nmhjklnm/cac/issues"
+    "url": "https://github.com/234150476/cac-windows/issues"
   },
   "os": [
-    "darwin",
-    "linux",
     "win32"
   ],
   "engines": {

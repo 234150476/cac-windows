@@ -37,15 +37,15 @@ if (process.platform === 'win32') {
         fs.writeFileSync(path.join(shimDir, 'cac.cmd'), [
           '@echo off',
           'where pwsh >nul 2>&1 && (',
-          '    pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\claude-cac\\cac.ps1" %*',
+          '    pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\cac-windows\\cac.ps1" %*',
           '    exit /b %ERRORLEVEL%',
           ')',
-          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\claude-cac\\cac.ps1" %*',
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0node_modules\\cac-windows\\cac.ps1" %*',
           ''
         ].join('\r\n'));
         // cac.ps1 shim — tries pwsh first, falls back to powershell.exe
         fs.writeFileSync(path.join(shimDir, 'cac.ps1'), [
-          '$cacDir = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "node_modules\\claude-cac"',
+          '$cacDir = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "node_modules\\cac-windows"',
           '$ps = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell.exe" }',
           '& $ps -NoProfile -ExecutionPolicy Bypass -File "$cacDir\\cac.ps1" @args',
           'exit $LASTEXITCODE',
@@ -207,7 +207,7 @@ try {
 
 var quickStart = [
   '',
-  '  claude-cac installed successfully',
+  '  cac-windows installed successfully',
   ''
 ];
 if (process.platform === 'win32') {

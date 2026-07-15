@@ -271,6 +271,25 @@ if (process.platform === 'win32') {
   } catch (e) {
     // Non-fatal — TZ patch is optional; cac works without it
   }
+
+  // Step 4: Patch session compatibility — older versions crash on newer session data.
+  // New versions may write null for originalFile in diff records; older cli.js does
+  // K.split() without null check, causing "Cannot read properties of null" on resume.
+  try {
+    var cliJs = path.join(ccDir, 'cli.js');
+    if (fs.existsSync(cliJs)) {
+      var cliText = fs.readFileSync(cliJs, 'utf8');
+      var nullBug = 'firstLine:K.split(`';
+      var nullFix = 'firstLine:(K||"").split(`';
+      if (cliText.indexOf(nullBug) !== -1 && cliText.indexOf(nullFix) === -1) {
+        if (!fs.existsSync(cliJs + '.bak')) fs.copyFileSync(cliJs, cliJs + '.bak');
+        fs.writeFileSync(cliJs, cliText.split(nullBug).join(nullFix), 'utf8');
+        console.log('  \x1b[32m✓ Session compatibility patch applied\x1b[0m');
+      }
+    }
+  } catch (e) {
+    // Non-fatal
+  }
 }
 
 var quickStart = [

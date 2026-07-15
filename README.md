@@ -74,6 +74,7 @@ cac env set proxy --remove             # 移除代理
 cac env set telemetry <mode>           # 遥测模式：stealth / paranoid / transparent
 cac env set persona <preset>           # 终端伪装：macos-vscode / macos-cursor / macos-iterm / linux-desktop
 cac env set persona --remove           # 移除伪装
+cac env set version <ver>              # 切换 Claude Code 版本（如 2.1.77）
 ```
 
 以上命令默认操作当前激活的环境，也可以指定环境名：
@@ -100,7 +101,7 @@ cac env set                  # 可设置的 key 列表
 
 ## 时区说明
 
-cac 在安装时会自动补丁 `claude.exe`，让 Claude Code 系统提示词里的日期跟随 `TZ` 环境变量。例如你的代理出口在夏威夷：
+cac 在安装时会自动补丁 Claude Code，让系统提示词里的日期跟随 `TZ` 环境变量。例如你的代理出口在夏威夷：
 
 ```powershell
 cac env set tz Pacific/Honolulu
@@ -108,7 +109,18 @@ cac env set tz Pacific/Honolulu
 
 Claude Code 的 `Today's date is ...` 会显示夏威夷当地日期，与你的出口 IP 地理位置一致。
 
-补丁是等长替换，不改变二进制结构，原文件自动备份为 `claude.exe.bak`。
+支持两种入口：SEA 二进制（`claude.exe`，2.1.202+）和 `cli.js`（2.1.77）。原文件自动备份。
+
+## 版本切换
+
+Pro 订阅用户在新版本可能遇到 1M 上下文被锁的问题。2.1.77 版本可正常使用 1M 上下文：
+
+```powershell
+cac env set version 2.1.77      # 切到旧版，享受 1M 上下文
+cac env set version 2.1.202     # 切回新版
+```
+
+cac 自动处理版本间的会话兼容性问题（新版会话在旧版打开不会崩溃）。
 
 ## 遥测模式
 

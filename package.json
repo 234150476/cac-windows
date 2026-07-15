@@ -1,6 +1,6 @@
 {
   "name": "cac-windows",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Claude Code Windows environment manager — identity isolation, fingerprint spoofing, timezone alignment.",
   "bin": {
     "cac": "cac"

@@ -25,13 +25,13 @@ Claude Code 的 Windows 环境管理工具 — 身份隔离、指纹伪装、时
 ## 安装
 
 ```powershell
-npm i -g cac-windows
+npm i -g cac-windows --registry https://registry.npmjs.org --force
 ```
 
 ## 快速开始
 
 ```powershell
-# 1. 初始化（首次使用）
+# 1. 初始化
 cac setup
 
 # 2. 把 .cac\bin 加到 PATH（只需执行一次）
@@ -39,10 +39,19 @@ $p = [Environment]::GetEnvironmentVariable("PATH", "User")
 $cacBin = "$env:USERPROFILE\.cac\bin"
 if ($p -notlike "*$cacBin*") { [Environment]::SetEnvironmentVariable("PATH", "$cacBin;$p", "User") }
 
-# 3. 重启终端，然后创建环境
+# 3. 创建环境
 cac env create myenv
 
-# 4. 启动 Claude Code
+# 4. 设置时区（按你的代理出口选）
+cac env set tz Pacific/Honolulu
+
+# 5. 设置遥测（关闭全部遥测）
+cac env set telemetry paranoid
+
+# 6. 切换到 2.1.77（Pro 订阅可用 1M 上下文）
+cac env set version 2.1.77
+
+# 7. 重启终端，启动 Claude Code
 claude
 ```
 

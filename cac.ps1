@@ -669,25 +669,15 @@ function Cmd-EnvSet {
             # Re-apply patches (npm install overwrites patched files)
             Write-Host "Applying patches..."
             $ccBase = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code"
-            & node -e @"
-const fs = require('fs');
-const ccDir = process.argv[1];
-const cliJs = require('path').join(ccDir, 'cli.js');
-if (!fs.existsSync(cliJs)) process.exit(0);
-let t = fs.readFileSync(cliJs, 'utf8'), changed = false;
-// TZ patch patterns
-const tzPats = [
-  ['function TD6(){let A=new Date,q=A.getFullYear(),K=String(A.getMonth()+1).padStart(2,\"0\"),Y=String(A.getDate()).padStart(2,\"0\");return\x60\x24{q}-\x24{K}-\x24{Y}\x60}',
-   'function TD6(){return new Intl.DateTimeFormat(\"sv\",{timeZone:process.env.TZ||\"UTC\"}).format(new Date)                                                 }'],
-  ['function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,\"0\"),n=String(e.getDate()).padStart(2,\"0\");return\x60\x24{t}-\x24{r}-\x24{n}\x60}',
-   'function byo(){return new Intl.DateTimeFormat(\"sv\",{timeZone:process.env.TZ||\"UTC\"}).format(new Date)                                                }'],
-];
-for (const [o,r] of tzPats) { if (t.includes(o)) { t = t.replace(o,r); changed = true; console.log('  TZ patch applied'); break; } }
-// Session compat
-const nb = 'firstLine:K.split(\x60', nf = 'firstLine:(K||\"\"').split(\x60';
-if (t.includes(nb) && !t.includes(nf)) { t = t.split(nb).join(nf); changed = true; console.log('  Session compat patch applied'); }
-if (changed) fs.writeFileSync(cliJs, t, 'utf8');
-"@ $ccBase
+            $patchJs = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "scripts\patch-cli.js"
+            if (Test-Path $patchJs) {
+                & node $patchJs $ccBase
+            } else {
+                # Fallback: find patch-cli.js relative to npm install location
+                $npmPatchJs = Join-Path $env:APPDATA "npm\node_modules\cac-windows\scripts\patch-cli.js"
+                if (Test-Path $npmPatchJs) { & node $npmPatchJs $ccBase }
+                else { Write-Yellow "  patch-cli.js not found, run 'npm i -g cac-windows' to fix" }
+            }
             Write-Green "Switched Claude Code to v$value"
         }
         default {

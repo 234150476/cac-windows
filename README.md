@@ -18,9 +18,9 @@ Claude Code 的 Windows 环境管理工具 — 身份隔离、指纹伪装、时
 - Windows 10 / 11
 - Node.js ≥ 14
 - PowerShell 5.1（系统自带）或 PowerShell 7（推荐）
-- Claude Code 2.1.202（`npm i -g @anthropic-ai/claude-code@2.1.202`）
+- Claude Code 2.1.77 或 2.1.202（`npm i -g @anthropic-ai/claude-code@2.1.202`）
 
-> ⚠️ **版本锁定说明：** TZ 时区补丁通过二进制签名匹配 claude.exe，仅在 2.1.202 上验证通过。使用其他版本时 cac 的环境隔离、指纹伪装等功能正常工作，但时区对齐功能会被跳过。
+> ⚠️ **版本说明：** TZ 时区补丁支持 2.1.77（cli.js）和 2.1.202（SEA 二进制）。其他版本的环境隔离、遥测拦截功能正常，但时区对齐可能被跳过。可通过 `cac env set version <ver>` 切换版本。
 
 ## 安装
 

@@ -210,40 +210,63 @@ if (process.platform === 'win32') {
     }
   } catch (e) { /* non-fatal */ }
 
-  // Step 3: Apply TZ patch
+  // Step 3: Apply TZ patch (supports both SEA binary and plain cli.js)
   try {
-    var claudeExePaths = [];
-    var exeCandidates = [
-      path.join(ccBinDir, 'claude.exe'),
-      path.join(ccBinDir, 'claude'),
+    // Date function patterns — different minified names across versions, same logic
+    var DATE_PATTERNS = [
+      // SEA binary (>=2.1.200): function byo()
+      { original: 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
+        replacement: function(name) { return 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
+      // cli.js (2.1.77): function TD6()
+      { original: 'function TD6(){let A=new Date,q=A.getFullYear(),K=String(A.getMonth()+1).padStart(2,"0"),Y=String(A.getDate()).padStart(2,"0");return`${q}-${K}-${Y}`}',
+        replacement: function(name) { return 'function TD6(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
     ];
-    for (var ci = 0; ci < exeCandidates.length; ci++) {
-      if (fs.existsSync(exeCandidates[ci])) claudeExePaths.push(exeCandidates[ci]);
+    var TZ_PATCHED_MARKER = 'Intl.DateTimeFormat("sv"';
+
+    // Collect patchable files: SEA binaries + cli.js
+    var patchTargets = [];
+    var seaCandidates = [path.join(ccBinDir, 'claude.exe'), path.join(ccBinDir, 'claude')];
+    for (var ci = 0; ci < seaCandidates.length; ci++) {
+      if (fs.existsSync(seaCandidates[ci])) patchTargets.push({ path: seaCandidates[ci], binary: true });
     }
+    var cliJs = path.join(ccDir, 'cli.js');
+    if (fs.existsSync(cliJs)) patchTargets.push({ path: cliJs, binary: false });
 
-    var BYO_ORIGINAL = 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}';
-    var BYO_PATCHED  = 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }';
+    for (var pi = 0; pi < patchTargets.length; pi++) {
+      var target = patchTargets[pi];
+      var content = target.binary
+        ? fs.readFileSync(target.path).toString('latin1')
+        : fs.readFileSync(target.path, 'utf8');
 
-    for (var pi = 0; pi < claudeExePaths.length; pi++) {
-      var exePath = claudeExePaths[pi];
-      var exeBytes = fs.readFileSync(exePath);
-      var exeText = exeBytes.toString('latin1');
+      if (content.indexOf(TZ_PATCHED_MARKER) !== -1) continue; // already patched
 
-      if (exeText.indexOf(BYO_PATCHED) !== -1) { continue; } // already patched
+      var patched = false;
+      for (var di = 0; di < DATE_PATTERNS.length; di++) {
+        var pat = DATE_PATTERNS[di];
+        var idx = content.indexOf(pat.original);
+        if (idx === -1) continue;
 
-      var byoIdx = exeText.indexOf(BYO_ORIGINAL);
-      if (byoIdx === -1) {
-        console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — binary signature mismatch (expected v' + SUPPORTED_CLAUDE_VERSION + ').');
-        continue;
+        // Backup
+        var bakPath = target.path + '.bak';
+        if (!fs.existsSync(bakPath)) fs.copyFileSync(target.path, bakPath);
+
+        if (target.binary) {
+          // Binary: same-length byte replacement
+          var exeBytes = fs.readFileSync(target.path);
+          var patchBuf = Buffer.from(pat.replacement(), 'latin1');
+          patchBuf.copy(exeBytes, idx);
+          fs.writeFileSync(target.path, exeBytes);
+        } else {
+          // Text: simple string replace
+          fs.writeFileSync(target.path, content.replace(pat.original, pat.replacement()), 'utf8');
+        }
+        console.log('  \x1b[32m✓ TZ patch applied\x1b[0m (' + path.basename(target.path) + ')');
+        patched = true;
+        break;
       }
-
-      var bakPath = exePath + '.bak';
-      if (!fs.existsSync(bakPath)) { fs.copyFileSync(exePath, bakPath); }
-
-      var patchBuf = Buffer.from(BYO_PATCHED, 'latin1');
-      patchBuf.copy(exeBytes, byoIdx);
-      fs.writeFileSync(exePath, exeBytes);
-      console.log('  \x1b[32m✓ TZ patch applied\x1b[0m');
+      if (!patched) {
+        console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — date function signature not recognized in ' + path.basename(target.path));
+      }
     }
   } catch (e) {
     // Non-fatal — TZ patch is optional; cac works without it

@@ -549,7 +549,7 @@ function Cmd-EnvSet {
     param([string[]]$SetArgs)
     Require-Setup
 
-    $knownKeys = @("proxy", "telemetry", "persona", "tz", "lang")
+    $knownKeys = @("proxy", "telemetry", "persona", "tz", "lang", "version")
 
     if ($SetArgs.Count -lt 1) {
         Write-Host ""
@@ -561,6 +561,7 @@ function Cmd-EnvSet {
         Write-Host "  set [name] persona <macos-vscode|macos-cursor|macos-iterm|linux-desktop|--remove>"
         Write-Host "  set [name] tz <timezone>                        Timezone (e.g. Pacific/Honolulu)"
         Write-Host "  set [name] lang <locale>                        Locale (e.g. en_US.UTF-8)"
+        Write-Host "  set [name] version <ver>                        Claude Code version (e.g. 2.1.77)"
         Write-Host ""
         Write-Host "  If name is omitted, uses the current active environment."
         Write-Host ""
@@ -589,7 +590,7 @@ function Cmd-EnvSet {
     }
 
     if ($rest.Count -lt 1) {
-        Write-Red "Error: missing key — use proxy, telemetry, persona, tz, or lang"
+        Write-Red "Error: missing key — use proxy, telemetry, persona, tz, lang, or version"
         exit 1
     }
 
@@ -654,8 +655,33 @@ function Cmd-EnvSet {
             Set-Content (Join-Path $envDir "lang") $value
             Write-Green "Set locale for $name -> $value"
         }
+        "version" {
+            if ($remove) { Write-Red "Error: cannot remove version — set a new value instead"; exit 1 }
+            if (-not $value) { Write-Red "Usage: cac env set [name] version <ver>`n  examples: 2.1.77, 2.1.202"; exit 1 }
+            Write-Host "Installing Claude Code v$value..."
+            $installResult = & npm install -g "@anthropic-ai/claude-code@$value" --registry https://registry.npmjs.org 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Red "Error: npm install failed"
+                Write-Host $installResult
+                exit 1
+            }
+            # Run install.cjs if needed (SEA versions)
+            $ccInstall = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\install.cjs"
+            if (Test-Path $ccInstall) {
+                $ccBinDir = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\bin"
+                $hasExe = (Test-Path (Join-Path $ccBinDir "claude.exe")) -or (Test-Path (Join-Path $ccBinDir "claude"))
+                if (-not $hasExe) {
+                    Write-Host "Running install.cjs..."
+                    & node $ccInstall 2>&1 | Out-Null
+                }
+            }
+            # Re-run setup to update real_claude path
+            Write-Host "Updating cac setup..."
+            Cmd-Setup
+            Write-Green "Switched Claude Code to v$value"
+        }
         default {
-            Write-Red "Error: unknown key '$key' — use proxy, telemetry, persona, tz, or lang"
+            Write-Red "Error: unknown key '$key' — use proxy, telemetry, persona, tz, lang, or version"
             exit 1
         }
     }

@@ -86,26 +86,14 @@ function Get-CurrentEnv {
 }
 
 function Find-RealClaude {
-    $paths = $env:PATH -split ";" | Where-Object { $_ -notlike "*\.cac\bin*" }
-    # Check for claude.exe first, then extensionless claude (SEA binary)
+    $npmBase = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code"
+    # Prefer SEA binary (newer versions)
     foreach ($name in @("claude.exe", "claude")) {
-        foreach ($p in $paths) {
-            $candidate = Join-Path $p $name
-            if (Test-Path $candidate) {
-                # Skip shim scripts (.cmd/.ps1) — we need the real binary
-                if ($candidate -match '\.(cmd|ps1|sh)$') { continue }
-                return $candidate
-            }
-        }
-    }
-    # Fallback: check known npm install location directly
-    $npmBin = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\bin"
-    foreach ($name in @("claude.exe", "claude")) {
-        $candidate = Join-Path $npmBin $name
+        $candidate = Join-Path $npmBase "bin\$name"
         if (Test-Path $candidate) { return $candidate }
     }
-    # Fallback: older versions use cli.js instead of SEA binary
-    $cliJs = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\cli.js"
+    # Fallback: cli.js (older versions like 2.1.77)
+    $cliJs = Join-Path $npmBase "cli.js"
     if (Test-Path $cliJs) { return $cliJs }
     return $null
 }

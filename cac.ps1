@@ -669,14 +669,11 @@ function Cmd-EnvSet {
             # Re-apply patches (npm install overwrites patched files)
             Write-Host "Applying patches..."
             $ccBase = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code"
-            $patchJs = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "scripts\patch-cli.js"
-            if (Test-Path $patchJs) {
-                & node $patchJs $ccBase
+            $npmPatchJs = Join-Path $env:APPDATA "npm\node_modules\cac-windows\scripts\patch-cli.js"
+            if (Test-Path $npmPatchJs) {
+                & node $npmPatchJs $ccBase
             } else {
-                # Fallback: find patch-cli.js relative to npm install location
-                $npmPatchJs = Join-Path $env:APPDATA "npm\node_modules\cac-windows\scripts\patch-cli.js"
-                if (Test-Path $npmPatchJs) { & node $npmPatchJs $ccBase }
-                else { Write-Yellow "  patch-cli.js not found, run 'npm i -g cac-windows' to fix" }
+                Write-Host "  patch-cli.js not found — patches not applied" -ForegroundColor Yellow
             }
             Write-Green "Switched Claude Code to v$value"
         }

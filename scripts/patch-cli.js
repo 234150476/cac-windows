@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const ccDir = process.argv[1] || path.join(process.env.APPDATA, "npm", "node_modules", "@anthropic-ai", "claude-code");
+const ccDir = process.argv[2] || path.join(process.env.APPDATA, "npm", "node_modules", "@anthropic-ai", "claude-code");
 const cliJs = path.join(ccDir, "cli.js");
 if (!fs.existsSync(cliJs)) { console.log("cli.js not found at " + cliJs); process.exit(0); }
 let t = fs.readFileSync(cliJs, "utf8"), changed = false;

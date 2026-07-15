@@ -5,9 +5,9 @@ node_modules/
 *.swo
 *~
 
-# build artifacts (root-level copies from src/)
-/fingerprint-hook.js
-/relay.js
+# build artifacts (root-level copies from src/) — kept for npm packaging
+# /fingerprint-hook.js
+# /relay.js
 
 # docker
 docker/.env

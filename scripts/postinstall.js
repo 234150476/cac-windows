@@ -174,7 +174,7 @@ if (process.platform === 'win32') {
   var ccInstall = path.join(ccDir, 'install.cjs');
   var ccPkgJson = path.join(ccDir, 'package.json');
 
-  // Step 1: Check if Claude Code is installed at the correct version
+  // Step 1: Check if Claude Code is installed
   var needInstall = false;
   if (!fs.existsSync(ccPkgJson)) {
     console.log('  Claude Code not found — installing v' + SUPPORTED_CLAUDE_VERSION + '...');
@@ -183,8 +183,9 @@ if (process.platform === 'win32') {
     try {
       var ccVersion = JSON.parse(fs.readFileSync(ccPkgJson, 'utf8')).version;
       if (ccVersion !== SUPPORTED_CLAUDE_VERSION) {
-        console.log('  Claude Code v' + ccVersion + ' detected — switching to v' + SUPPORTED_CLAUDE_VERSION + ' (TZ patch requires this version)...');
-        needInstall = true;
+        console.log('  Claude Code v' + ccVersion + ' detected (TZ patch supports v' + SUPPORTED_CLAUDE_VERSION + ').');
+        console.log('  TZ patch will be skipped. Other cac features work normally.');
+        console.log('  To get TZ support: npm i -g ' + CC_PKG + '@' + SUPPORTED_CLAUDE_VERSION);
       }
     } catch (e) { needInstall = true; }
   }

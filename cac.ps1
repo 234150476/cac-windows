@@ -104,6 +104,9 @@ function Find-RealClaude {
         $candidate = Join-Path $npmBin $name
         if (Test-Path $candidate) { return $candidate }
     }
+    # Fallback: older versions use cli.js instead of SEA binary
+    $cliJs = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\cli.js"
+    if (Test-Path $cliJs) { return $cliJs }
     return $null
 }
 
@@ -348,7 +351,12 @@ if (-not $real -or -not (Test-Path $real)) {
 }
 if (-not (Test-Path $real)) { Write-Error "[cac] claude not found"; exit 1 }
 
-& $real @args
+# Older versions use cli.js (plain Node script) instead of SEA binary
+if ($real -like "*.js") {
+    & node $real @args
+} else {
+    & $real @args
+}
 exit $LASTEXITCODE
 '@
     $ps1Path = Join-Path $binDir "claude.ps1"

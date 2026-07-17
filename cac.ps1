@@ -946,6 +946,14 @@ switch ($args[0]) {
     "list"    { Cmd-Ls }
     "check"   { Cmd-Check }
     "stop"    { Cmd-Stop }
+    "cleanup" {
+        $cleanupScript = Join-Path $env:APPDATA "npm\node_modules\cac-windows\scripts\cleanup.ps1"
+        if (Test-Path $cleanupScript) {
+            & $cleanupScript
+        } else {
+            Write-Red "cleanup.ps1 not found — reinstall cac-windows"
+        }
+    }
     "-c"      { Cmd-Continue }
     "help"    { Cmd-Help }
     "--help"  { Cmd-Help }

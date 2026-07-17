@@ -14,6 +14,7 @@
     "relay.js",
     "scripts/postinstall.js",
     "scripts/patch-cli.js",
+    "scripts/cleanup.ps1",
     "README.md",
     "LICENSE"
   ],

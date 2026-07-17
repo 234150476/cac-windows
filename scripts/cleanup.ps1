@@ -35,9 +35,9 @@ foreach ($t in @("telemetry", "statsig", "stats-cache.json")) {
     if (Test-Path $p) { Remove-Item $p -Recurse -Force; Write-Del $t }
 }
 
-# ── 3. Clear Sessions & History ──
-Write-Host "Clearing sessions & history..." -ForegroundColor White
-foreach ($t in @("history.jsonl", "sessions", "paste-cache", "shell-snapshots", "session-env", "file-history", "debug", "projects")) {
+# ── 3. Clear Telemetry Cache Files ──
+Write-Host "Clearing telemetry cache files..." -ForegroundColor White
+foreach ($t in @("debug")) {
     $p = Join-Path $claudeDir $t
     if (Test-Path $p) { Remove-Item $p -Recurse -Force; Write-Del $t }
 }

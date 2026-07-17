@@ -30,12 +30,12 @@ function Reset-DeviceIdentity {
     Write-Title "Level 1: Reset Device Identity"
     if (-not (Test-Path $claudeJson)) { Write-Skip ".claude.json not found"; return }
 
-    $json = Get-Content $claudeJson -Raw | ConvertFrom-Json
+    $json = Get-Content $claudeJson -Raw | ConvertFrom-Json -AsHashtable
     $keysToRemove = @("userID", "anonymousId", "firstStartTime", "claudeCodeFirstTokenDate")
     $removed = 0
     foreach ($k in $keysToRemove) {
-        if ($json.PSObject.Properties[$k]) {
-            $json.PSObject.Properties.Remove($k)
+        if ($json.ContainsKey($k)) {
+            $json.Remove($k)
             Write-Del $k
             $removed++
         }
@@ -118,7 +118,7 @@ function Clear-OAuth {
 
     # Remove OAuth keys from .claude.json
     if (Test-Path $claudeJson) {
-        $json = Get-Content $claudeJson -Raw | ConvertFrom-Json
+        $json = Get-Content $claudeJson -Raw | ConvertFrom-Json -AsHashtable
         $oauthKeys = @(
             "oauthAccount", "s1mAccessCache", "groveConfigCache",
             "passesEligibilityCache", "clientDataCache",
@@ -127,8 +127,8 @@ function Clear-OAuth {
         )
         $removed = 0
         foreach ($k in $oauthKeys) {
-            if ($json.PSObject.Properties[$k]) {
-                $json.PSObject.Properties.Remove($k)
+            if ($json.ContainsKey($k)) {
+                $json.Remove($k)
                 Write-Del $k
                 $removed++
             }

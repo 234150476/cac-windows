@@ -164,7 +164,7 @@ if (home && process.platform !== 'win32') {
 //   2. Claude Code wrong version → reinstall pinned version
 //   3. install.cjs not run (allow-scripts blocked) → run it
 //   4. TZ patch not applied → apply it
-var SUPPORTED_CLAUDE_VERSION = '2.1.202';
+var SUPPORTED_CLAUDE_VERSION = '2.1.222';
 var CC_PKG = '@anthropic-ai/claude-code';
 if (process.platform === 'win32') {
   var spawnSync = require('child_process').spawnSync;
@@ -214,7 +214,10 @@ if (process.platform === 'win32') {
   try {
     // Date function patterns — different minified names across versions, same logic
     var DATE_PATTERNS = [
-      // SEA binary (>=2.1.200): function byo()
+      // SEA binary (2.1.222): function fys()
+      { original: 'function fys(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
+        replacement: function(name) { return 'function fys(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
+      // SEA binary (2.1.202): function byo()
       { original: 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
         replacement: function(name) { return 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
       // cli.js (2.1.77): function TD6()

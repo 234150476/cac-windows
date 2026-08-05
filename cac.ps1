@@ -645,7 +645,7 @@ function Cmd-EnvSet {
         }
         "version" {
             if ($remove) { Write-Red "Error: cannot remove version — set a new value instead"; exit 1 }
-            if (-not $value) { Write-Red "Usage: cac env set [name] version <ver>`n  examples: 2.1.77, 2.1.202"; exit 1 }
+            if (-not $value) { Write-Red "Usage: cac env set [name] version <ver>`n  examples: 2.1.77, 2.1.202, 2.1.222"; exit 1 }
             Write-Host "Installing Claude Code v$value..."
             $installResult = & npm install -g "@anthropic-ai/claude-code@$value" --registry https://registry.npmjs.org 2>&1
             if ($LASTEXITCODE -ne 0) {

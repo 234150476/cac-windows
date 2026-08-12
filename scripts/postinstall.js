@@ -46,7 +46,7 @@ if (process.platform === 'win32') {
         // cac.ps1 shim — tries pwsh first, falls back to powershell.exe
         fs.writeFileSync(path.join(shimDir, 'cac.ps1'), [
           '$cacDir = Join-Path (Split-Path $MyInvocation.MyCommand.Definition -Parent) "node_modules\\cac-windows"',
-          '$ps = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell.exe" }',
+          'if (Get-Command pwsh -ErrorAction SilentlyContinue) { $ps = "pwsh" } else { $ps = "powershell.exe" }',
           '& $ps -NoProfile -ExecutionPolicy Bypass -File "$cacDir\\cac.ps1" @args',
           'exit $LASTEXITCODE',
           ''
@@ -55,106 +55,6 @@ if (process.platform === 'win32') {
     }
   } catch (e) {
     // Non-fatal — user can manually run: pwsh cac.ps1
-  }
-}
-
-// Auto-sync runtime files on install/upgrade
-// Pure Node.js — no bash/zsh dependency
-// Ensures bug fixes (dns-guard, relay, fingerprint-hook) take effect immediately
-try {
-  fs.mkdirSync(cacDir, { recursive: true });
-  var files = ['cac-dns-guard.js', 'relay.js', 'fingerprint-hook.js'];
-  for (var i = 0; i < files.length; i++) {
-    var src = path.join(pkgDir, files[i]);
-    var dst = path.join(cacDir, files[i]);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, dst);
-    }
-  }
-} catch (e) {
-  // Non-fatal — _ensure_initialized will catch it on first cac command
-}
-
-// Patch existing wrapper for known bugs — pure Node.js, no shell execution needed.
-// Users who upgrade via npm install keep their old ~/.cac/bin/claude until _ensure_initialized
-// runs (triggered by any cac command). This patch fixes critical bugs immediately.
-var wrapperPath = path.join(cacDir, 'bin', 'claude');
-if (home && fs.existsSync(wrapperPath)) {
-  try {
-    var wrapperContent = fs.readFileSync(wrapperPath, 'utf8');
-    var patched = wrapperContent;
-    // Fix: pgrep returns exit 1 when no claude process exists; under set -euo pipefail
-    // this aborts the wrapper before launching claude (claude appears to do nothing).
-    var buggyPgrep = '_claude_count=$(pgrep -x "claude" 2>/dev/null | wc -l | tr -d \'[:space:]\')';
-    var fixedPgrep = buggyPgrep + ' || _claude_count=0';
-    if (patched.indexOf(buggyPgrep) !== -1 && patched.indexOf(fixedPgrep) === -1) {
-      patched = patched.replace(buggyPgrep, fixedPgrep);
-    }
-    // Fix: session exit killed the shared relay, breaking all other sessions.
-    // Remove the trap so _cleanup_all never fires on exit.
-    var buggyTrap = 'trap _cleanup_all EXIT INT TERM';
-    if (patched.indexOf(buggyTrap) !== -1) {
-      patched = patched.replace(buggyTrap, '');
-    }
-    if (patched !== wrapperContent) {
-      fs.writeFileSync(wrapperPath, patched);
-    }
-  } catch (e) {
-    // Non-fatal
-  }
-}
-
-// Migrate existing environments: generate missing files added in v1.5.0
-// (fake_git_remote, git_email, device_token)
-try {
-  var crypto = require('crypto');
-  var envsDir = path.join(cacDir, 'envs');
-  if (fs.existsSync(envsDir)) {
-    var envs = fs.readdirSync(envsDir);
-    for (var ei = 0; ei < envs.length; ei++) {
-      var envDir = path.join(envsDir, envs[ei]);
-      if (!fs.statSync(envDir).isDirectory()) continue;
-      // fake_git_remote
-      if (!fs.existsSync(path.join(envDir, 'fake_git_remote'))) {
-        var u1 = crypto.randomUUID().split('-')[0];
-        var u2 = crypto.randomUUID().split('-')[1];
-        fs.writeFileSync(path.join(envDir, 'fake_git_remote'), 'https://github.com/user-' + u1 + '/project-' + u2 + '.git\n');
-      }
-      // git_email
-      if (!fs.existsSync(path.join(envDir, 'git_email'))) {
-        var u3 = crypto.randomUUID().split('-')[0].toLowerCase();
-        fs.writeFileSync(path.join(envDir, 'git_email'), 'user-' + u3 + '@users.noreply.github.com\n');
-      }
-      // device_token
-      if (!fs.existsSync(path.join(envDir, 'device_token'))) {
-        fs.writeFileSync(path.join(envDir, 'device_token'), crypto.randomBytes(32).toString('hex') + '\n');
-      }
-      // Migrate telemetry mode names
-      var tmFile = path.join(envDir, 'telemetry_mode');
-      if (fs.existsSync(tmFile)) {
-        var tm = fs.readFileSync(tmFile, 'utf8').trim();
-        var mapped = { conservative: 'stealth', aggressive: 'paranoid', off: 'transparent' };
-        if (mapped[tm]) fs.writeFileSync(tmFile, mapped[tm] + '\n');
-      }
-    }
-  }
-} catch (e) {
-  // Non-fatal — cac env create will generate these for new environments
-}
-
-// Trigger _ensure_initialized to fully regenerate wrapper to current version.
-// cac env ls now calls _require_setup (fixed in 1.4.3+).
-// Skip on Windows — the bash cac script can't run; user runs `cac setup` manually.
-if (home && process.platform !== 'win32') {
-  try {
-    var spawnSync = require('child_process').spawnSync;
-    spawnSync(cacBin, ['env', 'ls'], {
-      stdio: 'ignore',
-      timeout: 8000,
-      env: Object.assign({}, process.env, { HOME: home })
-    });
-  } catch (e) {
-    // Non-fatal
   }
 }
 
@@ -210,38 +110,21 @@ if (process.platform === 'win32') {
     }
   } catch (e) { /* non-fatal */ }
 
-  // Step 3: Apply TZ patch (supports both SEA binary and plain cli.js)
+  // Step 3: Apply TZ patch (SEA binary only)
   try {
-    // Date function patterns — different minified names across versions, same logic
     var DATE_PATTERNS = [
-      // SEA binary (2.1.222): function fys()
       { original: 'function fys(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
-        replacement: function(name) { return 'function fys(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
-      // SEA binary (2.1.202): function byo()
-      { original: 'function byo(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
-        replacement: function(name) { return 'function byo(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
-      // cli.js (2.1.77): function TD6()
-      { original: 'function TD6(){let A=new Date,q=A.getFullYear(),K=String(A.getMonth()+1).padStart(2,"0"),Y=String(A.getDate()).padStart(2,"0");return`${q}-${K}-${Y}`}',
-        replacement: function(name) { return 'function TD6(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
+        replacement: function() { return 'function fys(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
     ];
     var TZ_PATCHED_MARKER = 'Intl.DateTimeFormat("sv"';
 
-    // Collect patchable files: SEA binaries + cli.js
-    var patchTargets = [];
     var seaCandidates = [path.join(ccBinDir, 'claude.exe'), path.join(ccBinDir, 'claude')];
     for (var ci = 0; ci < seaCandidates.length; ci++) {
-      if (fs.existsSync(seaCandidates[ci])) patchTargets.push({ path: seaCandidates[ci], binary: true });
-    }
-    var cliJs = path.join(ccDir, 'cli.js');
-    if (fs.existsSync(cliJs)) patchTargets.push({ path: cliJs, binary: false });
+      if (!fs.existsSync(seaCandidates[ci])) continue;
+      var target = seaCandidates[ci];
+      var content = fs.readFileSync(target).toString('latin1');
 
-    for (var pi = 0; pi < patchTargets.length; pi++) {
-      var target = patchTargets[pi];
-      var content = target.binary
-        ? fs.readFileSync(target.path).toString('latin1')
-        : fs.readFileSync(target.path, 'utf8');
-
-      if (content.indexOf(TZ_PATCHED_MARKER) !== -1) continue; // already patched
+      if (content.indexOf(TZ_PATCHED_MARKER) !== -1) continue;
 
       var patched = false;
       for (var di = 0; di < DATE_PATTERNS.length; di++) {
@@ -249,49 +132,68 @@ if (process.platform === 'win32') {
         var idx = content.indexOf(pat.original);
         if (idx === -1) continue;
 
-        // Backup
-        var bakPath = target.path + '.bak';
-        if (!fs.existsSync(bakPath)) fs.copyFileSync(target.path, bakPath);
+        var bakPath = target + '.bak';
+        if (!fs.existsSync(bakPath)) fs.copyFileSync(target, bakPath);
 
-        if (target.binary) {
-          // Binary: same-length byte replacement
-          var exeBytes = fs.readFileSync(target.path);
-          var patchBuf = Buffer.from(pat.replacement(), 'latin1');
-          patchBuf.copy(exeBytes, idx);
-          fs.writeFileSync(target.path, exeBytes);
-        } else {
-          // Text: simple string replace
-          fs.writeFileSync(target.path, content.replace(pat.original, pat.replacement()), 'utf8');
-        }
-        console.log('  \x1b[32m✓ TZ patch applied\x1b[0m (' + path.basename(target.path) + ')');
+        var exeBytes = fs.readFileSync(target);
+        var patchBuf = Buffer.from(pat.replacement(), 'latin1');
+        patchBuf.copy(exeBytes, idx);
+        fs.writeFileSync(target, exeBytes);
+        console.log('  \x1b[32m✓ TZ patch applied\x1b[0m (' + path.basename(target) + ')');
         patched = true;
         break;
       }
       if (!patched) {
-        console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — date function signature not recognized in ' + path.basename(target.path));
+        console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — date function signature not recognized in ' + path.basename(target));
       }
     }
   } catch (e) {
     // Non-fatal — TZ patch is optional; cac works without it
   }
 
-  // Step 4: Patch session compatibility — older versions crash on newer session data.
-  // New versions may write null for originalFile in diff records; older cli.js does
-  // K.split() without null check, causing "Cannot read properties of null" on resume.
+  // Step 4: Privacy patches — fix timezone/locale/offset leaks (2.1.222)
   try {
-    var cliJs = path.join(ccDir, 'cli.js');
-    if (fs.existsSync(cliJs)) {
-      var cliText = fs.readFileSync(cliJs, 'utf8');
-      var nullBug = 'firstLine:K.split(`';
-      var nullFix = 'firstLine:(K||"").split(`';
-      if (cliText.indexOf(nullBug) !== -1 && cliText.indexOf(nullFix) === -1) {
-        if (!fs.existsSync(cliJs + '.bak')) fs.copyFileSync(cliJs, cliJs + '.bak');
-        fs.writeFileSync(cliJs, cliText.split(nullBug).join(nullFix), 'utf8');
-        console.log('  \x1b[32m✓ Session compatibility patch applied\x1b[0m');
+    var PRIVACY_MARKER = 'mss=process.env.TZ';
+    var PRIVACY_PATS = [
+      ['function yss(){if(!mss)mss=Intl.DateTimeFormat().resolvedOptions().timeZone;return mss}',
+       'function yss(){if(!mss)mss=process.env.TZ||"UTC"                           ;return mss}'],
+      ['function Zsu(){if(rpo===null)try{let e=Intl.DateTimeFormat().resolvedOptions().locale;rpo=new Intl.Locale(e).language}catch{rpo=void 0}return rpo}',
+       'function Zsu(){if(rpo===null)rpo="en";                                                                                                 return rpo}'],
+      ['let l=Intl.DateTimeFormat().resolvedOptions().timeZone',
+       'let l=process.env.TZ||"UTC"                           '],
+      ['.toLocaleDateString(void 0,{year:"numeric",month:"short",day:"numeric"})',
+       '.toLocaleDateString( "en" ,{year:"numeric",month:"short",day:"numeric"})'],
+    ];
+    var AKM_ORIG = 'i=-n.getTimezoneOffset(),s=Math.floor(Math.abs(i)/60),a=Math.abs(i)%60,c=`${i>=0?"+":"-"}${String(s).padStart(2,"0")}:${String(a).padStart(2,"0")}`';
+    var AKM_REPL = 'i=0                                                                                                                             ,s=0,a=0,c="+00:00"';
+
+    for (var ci = 0; ci < seaCandidates.length; ci++) {
+      if (!fs.existsSync(seaCandidates[ci])) continue;
+      var privExe = seaCandidates[ci];
+      var privBytes = fs.readFileSync(privExe);
+      var privText = privBytes.toString('latin1');
+      if (privText.indexOf(PRIVACY_MARKER) !== -1) continue;
+      var privChanged = false;
+      for (var pp = 0; pp < PRIVACY_PATS.length; pp++) {
+        var po = PRIVACY_PATS[pp][0], pr = PRIVACY_PATS[pp][1];
+        var pidx = privText.indexOf(po);
+        if (pidx === -1 || po.length !== pr.length) continue;
+        Buffer.from(pr, 'latin1').copy(privBytes, pidx);
+        privChanged = true;
+      }
+      var akmIdx = privText.indexOf(AKM_ORIG);
+      if (akmIdx !== -1 && AKM_ORIG.length === AKM_REPL.length) {
+        Buffer.from(AKM_REPL, 'latin1').copy(privBytes, akmIdx);
+        privChanged = true;
+      }
+      if (privChanged) {
+        if (!fs.existsSync(privExe + '.bak')) fs.copyFileSync(privExe, privExe + '.bak');
+        fs.writeFileSync(privExe, privBytes);
+        console.log('  \x1b[32m✓ Privacy patches applied\x1b[0m (' + path.basename(privExe) + ')');
       }
     }
   } catch (e) {
-    // Non-fatal
+    // Non-fatal — privacy patches are optional
   }
 }
 
@@ -302,18 +204,15 @@ var quickStart = [
 ];
 if (process.platform === 'win32') {
   quickStart.push(
-    '  Quick start (Windows):',
-    '    cac setup                             First-time setup',
-    '    cac env create <name> [-p <proxy>]    Create an isolated environment',
-    '    cac <name>                            Switch environment',
+    '  Quick start:',
+    '    cac                                   Launch menu',
     '    claude                                Start Claude Code'
   );
 } else {
   quickStart.push(
     '  Quick start:',
-    '    cac env create <name> [-p <proxy>]   Create an isolated environment',
-    '    cac <name>                           Switch environment',
-    '    claude                               Start Claude Code'
+    '    cac                                   Launch menu',
+    '    claude                                Start Claude Code'
   );
 }
 quickStart.push(

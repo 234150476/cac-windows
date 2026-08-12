@@ -1,7 +1,7 @@
 {
   "name": "cac-windows",
-  "version": "1.0.23",
-  "description": "Claude Code Windows environment manager — identity isolation, fingerprint spoofing, timezone alignment.",
+  "version": "1.0.24",
+  "description": "Claude Code Windows privacy tool — binary patches to remove Chinese identity markers.",
   "bin": {
     "cac": "cac"
   },
@@ -9,9 +9,8 @@
     "cac",
     "cac.ps1",
     "cac.cmd",
-    "cac-dns-guard.js",
-    "fingerprint-hook.js",
-    "relay.js",
+    "scripts/lib.ps1",
+    "scripts/menu.ps1",
     "scripts/postinstall.js",
     "scripts/patch-cli.js",
     "scripts/cleanup.ps1",
@@ -49,7 +48,7 @@
     "win32"
   ],
   "peerDependencies": {
-    "@anthropic-ai/claude-code": "2.1.77 || 2.1.202 || 2.1.222"
+    "@anthropic-ai/claude-code": ">=2.1.222"
   },
   "engines": {
     "node": ">=14.0.0"

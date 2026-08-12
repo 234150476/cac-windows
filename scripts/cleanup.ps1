@@ -17,7 +17,8 @@ Write-Host ""
 # ── 1. Reset Device Identity ──
 Write-Host "Resetting device identity..." -ForegroundColor White
 if (Test-Path $claudeJson) {
-    $json = Get-Content $claudeJson -Raw | ConvertFrom-Json -AsHashtable
+    try { $json = Get-Content $claudeJson -Raw | ConvertFrom-Json -AsHashtable }
+    catch { $json = @{}; (Get-Content $claudeJson -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $json[$_.Name] = $_.Value } }
     $removed = 0
     foreach ($k in @("userID", "anonymousId", "firstStartTime", "claudeCodeFirstTokenDate")) {
         if ($json.ContainsKey($k)) { $json.Remove($k); Write-Del $k; $removed++ }
@@ -52,7 +53,8 @@ try {
 } catch { Write-Skip "Credential Manager" }
 
 if (Test-Path $claudeJson) {
-    $json = Get-Content $claudeJson -Raw | ConvertFrom-Json -AsHashtable
+    try { $json = Get-Content $claudeJson -Raw | ConvertFrom-Json -AsHashtable }
+    catch { $json = @{}; (Get-Content $claudeJson -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $json[$_.Name] = $_.Value } }
     $removed = 0
     foreach ($k in @("oauthAccount", "s1mAccessCache", "groveConfigCache", "passesEligibilityCache", "clientDataCache", "cachedExtraUsageDisabledReason", "githubRepoPaths", "hasExtraUsageEnabled")) {
         if ($json.ContainsKey($k)) { $json.Remove($k); Write-Del $k; $removed++ }

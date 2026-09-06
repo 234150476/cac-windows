@@ -232,7 +232,16 @@ function Action-EnvCreate {
     $ed = Get-EnvDir $name
     if (Test-Path $ed) { Write-Err "环境 '$name' 已存在"; Wait-AnyKey; return }
     $rawProxy = Read-Input "  代理地址 (回车跳过)"
-    $tzInput = Read-Input "  时区 (如 Pacific/Honolulu, 回车跳过)"
+    # Timezone is the whole point of this tool — don't let it silently default to UTC.
+    Write-Host "  时区应与你的代理出口地区一致，例如: Pacific/Honolulu  America/Los_Angeles  Asia/Tokyo  Asia/Taipei" -ForegroundColor DarkGray
+    $tzInput = ""
+    while (-not $tzInput) {
+        $tzInput = (Read-Input "  时区 (必填)").Trim()
+        if ($tzInput -and $tzInput -notmatch '^[A-Za-z_]+(/[A-Za-z_+\-0-9]+)+$' -and $tzInput -ne "UTC") {
+            Write-Warn "格式看起来不对，应为 区域/城市，如 Pacific/Honolulu"
+            $tzInput = ""
+        }
+    }
     New-Item -ItemType Directory -Path $ed -Force | Out-Null
     Set-Content (Join-Path $ed "uuid")       (New-Uuid)
     Set-Content (Join-Path $ed "stable_id")  (New-Sid)
@@ -240,19 +249,23 @@ function Action-EnvCreate {
     Set-Content (Join-Path $ed "machine_id") (New-MachineId)
     Set-Content (Join-Path $ed "hostname")   (New-FakeHostname)
     Set-Content (Join-Path $ed "mac_address")(New-FakeMac)
-    if ($tzInput) { $tzVal = $tzInput } else { $tzVal = "UTC" }
-    Set-Content (Join-Path $ed "tz")         $tzVal
+    Set-Content (Join-Path $ed "tz")         $tzInput
     Set-Content (Join-Path $ed "lang")       "en_US.UTF-8"
+    $proxyNote = "(无)"
     if ($rawProxy) {
         $url = Parse-Proxy $rawProxy
-        if ($url) { Set-Content (Join-Path $ed "proxy") $url }
+        if ($url) { Set-Content (Join-Path $ed "proxy") $url; $proxyNote = $url }
         else { Write-Warn "代理格式无效，已跳过" }
     }
     Set-Content (Join-Path $CAC_DIR "current") $name
     $sid = Read-FileValue (Join-Path $ed "stable_id")
     Update-Statsig $sid
     Update-ClaudeJsonUserId (Read-FileValue (Join-Path $ed "user_id"))
-    Write-OK "已创建 '$name'"
+    Write-Host ""
+    Write-OK "已创建并激活 '$name'"
+    Write-Host "     时区: $tzInput" -ForegroundColor White
+    Write-Host "     代理: $proxyNote" -ForegroundColor White
+    Write-Host "     语言: en_US.UTF-8" -ForegroundColor White
     Wait-AnyKey
 }
 
@@ -261,10 +274,17 @@ function Action-EnvSetTz {
     if (-not $envName) { Write-Err "未激活环境"; Wait-AnyKey; return }
     $cur = Read-FileValue (Join-Path (Get-EnvDir $envName) "tz")
     Write-Host "  当前时区: $cur" -ForegroundColor DarkGray
-    $tz = Read-Input "  新时区"
-    if ($tz) {
-        Set-Content (Join-Path (Get-EnvDir $envName) "tz") $tz
-        Write-OK "时区 -> $tz"
+    Write-Host "  例如: Pacific/Honolulu  America/Los_Angeles  Asia/Tokyo  Asia/Taipei" -ForegroundColor DarkGray
+    $tz = (Read-Input "  新时区 (回车取消)").Trim()
+    if (-not $tz) { return }
+    if ($tz -notmatch '^[A-Za-z_]+(/[A-Za-z_+\-0-9]+)+$' -and $tz -ne "UTC") {
+        Write-Err "格式看起来不对，应为 区域/城市，如 Pacific/Honolulu"
+        Wait-AnyKey; return
+    }
+    Set-Content (Join-Path (Get-EnvDir $envName) "tz") $tz
+    Write-OK "时区 -> $tz"
+    if (@(Get-Process -Name claude -ErrorAction SilentlyContinue).Count -gt 0) {
+        Write-Warn "有 claude 在运行，重启后新时区才生效"
     }
     Wait-AnyKey
 }

@@ -16,7 +16,7 @@ Claude Code 的 Windows 隐私保护工具 — 二进制补丁抹除中国特征
 - Windows 10 / 11
 - Node.js ≥ 14
 - PowerShell 5.1（系统自带）或 PowerShell 7（推荐）
-- Claude Code 2.1.222+（`npm i -g @anthropic-ai/claude-code@2.1.222`）
+- Claude Code 2.1.263+（`npm i -g @anthropic-ai/claude-code@2.1.263`）
 
 ## 安装
 

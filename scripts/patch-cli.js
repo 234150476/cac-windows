@@ -2,25 +2,28 @@ const fs = require("fs");
 const path = require("path");
 const ccDir = process.argv[2] || path.join(process.env.APPDATA, "npm", "node_modules", "@anthropic-ai", "claude-code");
 
-const TZ_MARKER = 'Intl.DateTimeFormat("sv"';
+// Marker strings only exist in a patched binary (padding spaces never occur in minified source)
+const TZ_MARKER = 'Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)   ';
+const PRIVACY_MARKER = '=process.env.TZ||"UTC"   ';
+
+// 2.1.263 signatures — minified names change every release, re-extract with find-sigs.js
 const tzPats = [
-  ['function fys(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
-   'function fys(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }'],
+  ['function kSt(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),o=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${o}`}',
+   'function kSt(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }'],
 ];
 
-const PRIVACY_MARKER = 'mss=process.env.TZ';
 const privacyPats = [
-  ['function yss(){if(!mss)mss=Intl.DateTimeFormat().resolvedOptions().timeZone;return mss}',
-   'function yss(){if(!mss)mss=process.env.TZ||"UTC"                           ;return mss}'],
-  ['function Zsu(){if(rpo===null)try{let e=Intl.DateTimeFormat().resolvedOptions().locale;rpo=new Intl.Locale(e).language}catch{rpo=void 0}return rpo}',
-   'function Zsu(){if(rpo===null)rpo="en";                                                                                                 return rpo}'],
-  ['let l=Intl.DateTimeFormat().resolvedOptions().timeZone',
-   'let l=process.env.TZ||"UTC"                           '],
+  ['function sIn(){if(!u)u=Intl.DateTimeFormat().resolvedOptions().timeZone;return u}',
+   'function sIn(){if(!u)u=process.env.TZ||"UTC"                           ;return u}'],
+  ['function Wlr(){if(a===null)try{let e=Intl.DateTimeFormat().resolvedOptions().locale;a=new Intl.Locale(e).language}catch{a=void 0}return a}',
+   'function Wlr(){if(a===null)a="en";                                                                                               return a}'],
+  ['let _=Intl.DateTimeFormat().resolvedOptions().timeZone',
+   'let _=process.env.TZ||"UTC"                           '],
   ['.toLocaleDateString(void 0,{year:"numeric",month:"short",day:"numeric"})',
    '.toLocaleDateString( "en" ,{year:"numeric",month:"short",day:"numeric"})'],
+  ['Te=-fe.getTimezoneOffset(),xe=Math.floor(Math.abs(Te)/60),De=Math.abs(Te)%60,Ve=`${Te>=0?"+":"-"}${String(xe).padStart(2,"0")}:${String(De).padStart(2,"0")}`',
+   'Te=0                                                                                                                                   ,xe=0,De=0,Ve="+00:00"'],
 ];
-const akmOriginal = 'i=-n.getTimezoneOffset(),s=Math.floor(Math.abs(i)/60),a=Math.abs(i)%60,c=`${i>=0?"+":"-"}${String(s).padStart(2,"0")}:${String(a).padStart(2,"0")}`';
-const akmReplace  = 'i=0                                                                                                                             ,s=0,a=0,c="+00:00"';
 
 const binDir = path.join(ccDir, "bin");
 const seaCandidates = ["claude.exe", "claude"].map(n => path.join(binDir, n)).filter(p => fs.existsSync(p));
@@ -30,55 +33,42 @@ if (seaCandidates.length === 0) {
   process.exit(0);
 }
 
+function applyPats(bytes, text, pats) {
+  let n = 0;
+  for (const [o, r] of pats) {
+    if (o.length !== r.length) { console.log("  length mismatch, skipped: " + o.slice(0, 30)); continue; }
+    const idx = text.indexOf(o);
+    if (idx === -1) continue;
+    Buffer.from(r, "latin1").copy(bytes, idx);
+    n++;
+  }
+  return n;
+}
+
 for (const exe of seaCandidates) {
+  const name = path.basename(exe);
   let bytes = fs.readFileSync(exe);
   let text = bytes.toString("latin1");
-  let anyChange = false;
+  let changed = false;
 
-  // TZ date patch
   if (text.includes(TZ_MARKER)) {
-    console.log("  TZ patch already applied (" + path.basename(exe) + ")");
+    console.log("  TZ patch already applied (" + name + ")");
   } else {
-    for (const [o, r] of tzPats) {
-      const idx = text.indexOf(o);
-      if (idx === -1) continue;
-      if (!fs.existsSync(exe + ".bak")) fs.copyFileSync(exe, exe + ".bak");
-      Buffer.from(r, "latin1").copy(bytes, idx);
-      anyChange = true;
-      console.log("  TZ patch applied (" + path.basename(exe) + ")");
-      break;
-    }
-    if (!anyChange) { console.log("  TZ patch skipped — signature not found in " + path.basename(exe)); }
-    if (anyChange) {
-      fs.writeFileSync(exe, bytes);
-      text = bytes.toString("latin1");
-    }
+    const n = applyPats(bytes, text, tzPats);
+    if (n > 0) { changed = true; console.log("  TZ patch applied (" + name + ")"); }
+    else console.log("  TZ patch skipped — signature not found in " + name);
   }
 
-  // Privacy patches
   if (text.includes(PRIVACY_MARKER)) {
-    console.log("  Privacy patches already applied (" + path.basename(exe) + ")");
+    console.log("  Privacy patches already applied (" + name + ")");
   } else {
-    if (anyChange) {
-      bytes = fs.readFileSync(exe);
-      text = bytes.toString("latin1");
-    }
-    let privacyChanged = false;
-    for (const [o, r] of privacyPats) {
-      const pidx = text.indexOf(o);
-      if (pidx === -1 || o.length !== r.length) continue;
-      Buffer.from(r, "latin1").copy(bytes, pidx);
-      privacyChanged = true;
-    }
-    const akmIdx = text.indexOf(akmOriginal);
-    if (akmIdx !== -1 && akmOriginal.length === akmReplace.length) {
-      Buffer.from(akmReplace, "latin1").copy(bytes, akmIdx);
-      privacyChanged = true;
-    }
-    if (privacyChanged) {
-      if (!fs.existsSync(exe + ".bak") && !anyChange) fs.copyFileSync(exe, exe + ".bak");
-      fs.writeFileSync(exe, bytes);
-      console.log("  Privacy patches applied (" + path.basename(exe) + ")");
-    }
+    const n = applyPats(bytes, text, privacyPats);
+    if (n > 0) { changed = true; console.log("  Privacy patches applied " + n + "/" + privacyPats.length + " (" + name + ")"); }
+    else console.log("  Privacy patches skipped — signatures not found in " + name);
+  }
+
+  if (changed) {
+    if (!fs.existsSync(exe + ".bak")) fs.copyFileSync(exe, exe + ".bak");
+    fs.writeFileSync(exe, bytes);
   }
 }

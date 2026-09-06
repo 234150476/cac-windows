@@ -64,7 +64,7 @@ if (process.platform === 'win32') {
 //   2. Claude Code wrong version → reinstall pinned version
 //   3. install.cjs not run (allow-scripts blocked) → run it
 //   4. TZ patch not applied → apply it
-var SUPPORTED_CLAUDE_VERSION = '2.1.222';
+var SUPPORTED_CLAUDE_VERSION = '2.1.263';
 var CC_PKG = '@anthropic-ai/claude-code';
 if (process.platform === 'win32') {
   var spawnSync = require('child_process').spawnSync;
@@ -110,90 +110,14 @@ if (process.platform === 'win32') {
     }
   } catch (e) { /* non-fatal */ }
 
-  // Step 3: Apply TZ patch (SEA binary only)
+  // Step 3: Apply TZ + privacy patches (single source of truth: scripts/patch-cli.js)
   try {
-    var DATE_PATTERNS = [
-      { original: 'function fys(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),n=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${n}`}',
-        replacement: function() { return 'function fys(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)' + ' '.repeat(62) + '}'; } },
-    ];
-    var TZ_PATCHED_MARKER = 'Intl.DateTimeFormat("sv"';
-
-    var seaCandidates = [path.join(ccBinDir, 'claude.exe'), path.join(ccBinDir, 'claude')];
-    for (var ci = 0; ci < seaCandidates.length; ci++) {
-      if (!fs.existsSync(seaCandidates[ci])) continue;
-      var target = seaCandidates[ci];
-      var content = fs.readFileSync(target).toString('latin1');
-
-      if (content.indexOf(TZ_PATCHED_MARKER) !== -1) continue;
-
-      var patched = false;
-      for (var di = 0; di < DATE_PATTERNS.length; di++) {
-        var pat = DATE_PATTERNS[di];
-        var idx = content.indexOf(pat.original);
-        if (idx === -1) continue;
-
-        var bakPath = target + '.bak';
-        if (!fs.existsSync(bakPath)) fs.copyFileSync(target, bakPath);
-
-        var exeBytes = fs.readFileSync(target);
-        var patchBuf = Buffer.from(pat.replacement(), 'latin1');
-        patchBuf.copy(exeBytes, idx);
-        fs.writeFileSync(target, exeBytes);
-        console.log('  \x1b[32m✓ TZ patch applied\x1b[0m (' + path.basename(target) + ')');
-        patched = true;
-        break;
-      }
-      if (!patched) {
-        console.log('  \x1b[33m⚠ TZ patch skipped\x1b[0m — date function signature not recognized in ' + path.basename(target));
-      }
+    var patchScript = path.join(__dirname, 'patch-cli.js');
+    if (fs.existsSync(patchScript)) {
+      spawnSync(process.execPath, [patchScript, ccDir], { stdio: 'inherit', timeout: 120000 });
     }
   } catch (e) {
-    // Non-fatal — TZ patch is optional; cac works without it
-  }
-
-  // Step 4: Privacy patches — fix timezone/locale/offset leaks (2.1.222)
-  try {
-    var PRIVACY_MARKER = 'mss=process.env.TZ';
-    var PRIVACY_PATS = [
-      ['function yss(){if(!mss)mss=Intl.DateTimeFormat().resolvedOptions().timeZone;return mss}',
-       'function yss(){if(!mss)mss=process.env.TZ||"UTC"                           ;return mss}'],
-      ['function Zsu(){if(rpo===null)try{let e=Intl.DateTimeFormat().resolvedOptions().locale;rpo=new Intl.Locale(e).language}catch{rpo=void 0}return rpo}',
-       'function Zsu(){if(rpo===null)rpo="en";                                                                                                 return rpo}'],
-      ['let l=Intl.DateTimeFormat().resolvedOptions().timeZone',
-       'let l=process.env.TZ||"UTC"                           '],
-      ['.toLocaleDateString(void 0,{year:"numeric",month:"short",day:"numeric"})',
-       '.toLocaleDateString( "en" ,{year:"numeric",month:"short",day:"numeric"})'],
-    ];
-    var AKM_ORIG = 'i=-n.getTimezoneOffset(),s=Math.floor(Math.abs(i)/60),a=Math.abs(i)%60,c=`${i>=0?"+":"-"}${String(s).padStart(2,"0")}:${String(a).padStart(2,"0")}`';
-    var AKM_REPL = 'i=0                                                                                                                             ,s=0,a=0,c="+00:00"';
-
-    for (var ci = 0; ci < seaCandidates.length; ci++) {
-      if (!fs.existsSync(seaCandidates[ci])) continue;
-      var privExe = seaCandidates[ci];
-      var privBytes = fs.readFileSync(privExe);
-      var privText = privBytes.toString('latin1');
-      if (privText.indexOf(PRIVACY_MARKER) !== -1) continue;
-      var privChanged = false;
-      for (var pp = 0; pp < PRIVACY_PATS.length; pp++) {
-        var po = PRIVACY_PATS[pp][0], pr = PRIVACY_PATS[pp][1];
-        var pidx = privText.indexOf(po);
-        if (pidx === -1 || po.length !== pr.length) continue;
-        Buffer.from(pr, 'latin1').copy(privBytes, pidx);
-        privChanged = true;
-      }
-      var akmIdx = privText.indexOf(AKM_ORIG);
-      if (akmIdx !== -1 && AKM_ORIG.length === AKM_REPL.length) {
-        Buffer.from(AKM_REPL, 'latin1').copy(privBytes, akmIdx);
-        privChanged = true;
-      }
-      if (privChanged) {
-        if (!fs.existsSync(privExe + '.bak')) fs.copyFileSync(privExe, privExe + '.bak');
-        fs.writeFileSync(privExe, privBytes);
-        console.log('  \x1b[32m✓ Privacy patches applied\x1b[0m (' + path.basename(privExe) + ')');
-      }
-    }
-  } catch (e) {
-    // Non-fatal — privacy patches are optional
+    // Non-fatal — patches are optional; cac works without them
   }
 }
 

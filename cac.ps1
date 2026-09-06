@@ -1,8 +1,8 @@
 ﻿#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$CAC_VERSION = "1.0.24"
-$SUPPORTED_CC = "2.1.222"
+$CAC_VERSION = "1.0.25"
+$SUPPORTED_CC = "2.1.263"
 
 $scriptDir = Split-Path $MyInvocation.MyCommand.Definition -Parent
 . (Join-Path $scriptDir "scripts\lib.ps1")
@@ -25,7 +25,7 @@ function Test-Patched {
     if (-not (Test-Path $exe)) { $script:_patchedCache = $false; return $false }
     $bytes = [System.IO.File]::ReadAllBytes($exe)
     $text = [System.Text.Encoding]::GetEncoding("iso-8859-1").GetString($bytes, 0, [Math]::Min($bytes.Length, 280000000))
-    $script:_patchedCache = $text.Contains('mss=process.env.TZ')
+    $script:_patchedCache = $text.Contains('=process.env.TZ||"UTC"   ')
     return $script:_patchedCache
 }
 

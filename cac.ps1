@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$CAC_VERSION = "1.0.25"
+$CAC_VERSION = "1.0.26"
 $SUPPORTED_CC = "2.1.263"
 
 $scriptDir = Split-Path $MyInvocation.MyCommand.Definition -Parent
@@ -93,7 +93,7 @@ function Do-Init {
     Write-OK "Claude Code: $claude"
     Write-Wrapper | Out-Null
     Write-OK "Wrapper: $(Join-Path $CAC_DIR 'bin\claude.ps1')"
-    if (Ensure-CacInPath) { Write-OK "PATH: 已把 $(Join-Path $CAC_DIR 'bin') 加到最前（重开终端后生效）" }
+    if (Ensure-CacInPath) { Write-OK "PATH: 已把 $(Join-Path $CAC_DIR 'bin') 加到 npm 目录之前（重开终端后生效）" }
     else { Write-OK "PATH: 已包含 $(Join-Path $CAC_DIR 'bin')" }
     if (@(Get-Process -Name claude -ErrorAction SilentlyContinue).Count -gt 0) {
         Write-Warn "补丁: 跳过 — 有 Claude Code 在运行，二进制被锁定。退出所有 claude 后再打开 cac 会自动补丁"
@@ -126,6 +126,8 @@ function Action-Launch {
     $tz = Read-FileValue (Join-Path $ed "tz")
     if ($tz) { $env:TZ = $tz }
     $env:LANG = Read-FileValue (Join-Path $ed "lang") "en_US.UTF-8"
+    # claude.exe ships precompiled JSC bytecode; without this the patched JS source is never executed
+    $env:BUN_JSC_useCodeCache = "false"
     $sid = Read-FileValue (Join-Path $ed "stable_id")
     if ($sid) { Update-Statsig $sid }
     $uid = Read-FileValue (Join-Path $ed "user_id")

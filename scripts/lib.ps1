@@ -163,6 +163,7 @@ set "LANG=en_US.UTF-8"
 if exist "!ENV_DIR!\lang" (
     for /f "usebackq delims=" %%i in ("!ENV_DIR!\lang") do set "LANG=%%i"
 )
+set "BUN_JSC_useCodeCache=false"
 if exist "!ENV_DIR!\stable_id" (
     for /f "usebackq delims=" %%i in ("!ENV_DIR!\stable_id") do set "STABLE_ID=%%i"
     for %%f in ("%USERPROFILE%\.claude\statsig\statsig.stable_id.*") do (
@@ -192,6 +193,8 @@ $tf = Join-Path $ed "tz"
 if (Test-Path $tf) { $env:TZ = (Get-Content $tf -Raw).Trim() }
 $lf = Join-Path $ed "lang"
 if (Test-Path $lf) { $env:LANG = (Get-Content $lf -Raw).Trim() } else { $env:LANG = "en_US.UTF-8" }
+# claude.exe ships precompiled JSC bytecode; without this the patched JS source is never executed
+$env:BUN_JSC_useCodeCache = "false"
 $sf = Join-Path $ed "stable_id"
 if (Test-Path $sf) {
     $sid = (Get-Content $sf -Raw).Trim()

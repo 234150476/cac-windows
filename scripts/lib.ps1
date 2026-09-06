@@ -122,7 +122,6 @@ for /f "usebackq delims=" %%i in ("!CAC_DIR!\real_claude") do set "REAL_CLAUDE=%
 "!REAL_CLAUDE!" %*
 exit /b !ERRORLEVEL!
 '@
-    Set-Content (Join-Path $binDir "claude.cmd") $cmd -Encoding ASCII
 
     # PowerShell wrapper
     $ps1 = @'
@@ -168,5 +167,10 @@ if (-not (Test-Path $real)) { Write-Error "[cac] claude not found"; exit 1 }
 & $real @args
 exit $LASTEXITCODE
 '@
-    Set-Content (Join-Path $binDir "claude.ps1") $ps1 -Encoding UTF8
+    $ps1Path = Join-Path $binDir "claude.ps1"
+    $cmdPath = Join-Path $binDir "claude.cmd"
+    $changed = $false
+    if ((Read-FileValue $ps1Path) -ne $ps1.Trim()) { Set-Content $ps1Path $ps1 -Encoding UTF8; $changed = $true }
+    if ((Read-FileValue $cmdPath) -ne $cmd.Trim()) { Set-Content $cmdPath $cmd -Encoding ASCII; $changed = $true }
+    return $changed
 }

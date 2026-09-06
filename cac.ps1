@@ -42,7 +42,11 @@ function Do-Patch {
 
 function Do-Init {
     $realFile = Join-Path $CAC_DIR "real_claude"
-    if (Test-Path $realFile) { return $true }
+    if (Test-Path $realFile) {
+        # 已初始化：静默同步 wrapper（cac-windows 升级后 wrapper 内容可能已变）
+        if (Write-Wrapper) { Write-Host "  wrapper 已更新" -ForegroundColor DarkGray; Start-Sleep -Milliseconds 600 }
+        return $true
+    }
     Write-Host ""
     Write-Host "  正在初始化..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Path $ENVS_DIR -Force | Out-Null
@@ -54,7 +58,7 @@ function Do-Init {
     }
     Set-Content $realFile $claude
     Write-OK "Claude Code: $claude"
-    Write-Wrapper
+    Write-Wrapper | Out-Null
     Write-OK "Wrapper: $(Join-Path $CAC_DIR 'bin\claude.ps1')"
     Do-Patch
     Write-Host ""
@@ -106,7 +110,7 @@ function Action-InstallAndPatch {
     $claude = Find-RealClaude
     if ($claude) {
         Set-Content (Join-Path $CAC_DIR "real_claude") $claude
-        Write-Wrapper
+        Write-Wrapper | Out-Null
     }
     Do-Patch
     Reset-PatchCache

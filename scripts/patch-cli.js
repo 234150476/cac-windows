@@ -45,30 +45,45 @@ function applyPats(bytes, text, pats) {
   return n;
 }
 
+let exitCode = 0;
 for (const exe of seaCandidates) {
   const name = path.basename(exe);
   let bytes = fs.readFileSync(exe);
   let text = bytes.toString("latin1");
+  const msgs = [];
   let changed = false;
 
   if (text.includes(TZ_MARKER)) {
-    console.log("  TZ patch already applied (" + name + ")");
+    msgs.push("TZ patch already applied");
   } else {
     const n = applyPats(bytes, text, tzPats);
-    if (n > 0) { changed = true; console.log("  TZ patch applied (" + name + ")"); }
-    else console.log("  TZ patch skipped — signature not found in " + name);
+    if (n > 0) { changed = true; msgs.push("TZ patch applied"); }
+    else msgs.push("TZ patch skipped — signature not found");
   }
 
   if (text.includes(PRIVACY_MARKER)) {
-    console.log("  Privacy patches already applied (" + name + ")");
+    msgs.push("Privacy patches already applied");
   } else {
     const n = applyPats(bytes, text, privacyPats);
-    if (n > 0) { changed = true; console.log("  Privacy patches applied " + n + "/" + privacyPats.length + " (" + name + ")"); }
-    else console.log("  Privacy patches skipped — signatures not found in " + name);
+    if (n > 0) { changed = true; msgs.push("Privacy patches applied " + n + "/" + privacyPats.length); }
+    else msgs.push("Privacy patches skipped — signatures not found");
   }
 
   if (changed) {
-    if (!fs.existsSync(exe + ".bak")) fs.copyFileSync(exe, exe + ".bak");
-    fs.writeFileSync(exe, bytes);
+    // Write FIRST, report after — a locked binary (claude running) must not be reported as patched.
+    try {
+      if (!fs.existsSync(exe + ".bak")) fs.copyFileSync(exe, exe + ".bak");
+      fs.writeFileSync(exe, bytes);
+    } catch (e) {
+      exitCode = 1;
+      if (e.code === "EBUSY" || e.code === "EPERM") {
+        console.log("  PATCH FAILED (" + name + "): binary is locked — close all Claude Code sessions and retry");
+      } else {
+        console.log("  PATCH FAILED (" + name + "): " + e.message);
+      }
+      continue;
+    }
   }
+  msgs.forEach(m => console.log("  " + m + " (" + name + ")"));
 }
+process.exit(exitCode);

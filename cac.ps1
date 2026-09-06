@@ -95,9 +95,14 @@ function Do-Init {
     Write-OK "Wrapper: $(Join-Path $CAC_DIR 'bin\claude.ps1')"
     if (Ensure-CacInPath) { Write-OK "PATH: 已把 $(Join-Path $CAC_DIR 'bin') 加到最前（重开终端后生效）" }
     else { Write-OK "PATH: 已包含 $(Join-Path $CAC_DIR 'bin')" }
-    Do-Patch
-    Reset-PatchCache
-    if (Test-Patched) { Write-OK "补丁: 已应用" } else { Write-Warn "补丁: 未应用（版本 $(Get-CcVersion) 与支持的 $SUPPORTED_CC 不一致？）" }
+    if (@(Get-Process -Name claude -ErrorAction SilentlyContinue).Count -gt 0) {
+        Write-Warn "补丁: 跳过 — 有 Claude Code 在运行，二进制被锁定。退出所有 claude 后再打开 cac 会自动补丁"
+    } else {
+        Do-Patch
+        Reset-PatchCache
+        if (Test-Patched) { Write-OK "补丁: 已应用" }
+        else { Write-Warn "补丁: 未应用（见上方输出；版本 $(Get-CcVersion) 是否为 $SUPPORTED_CC？）" }
+    }
     Write-Host ""
     Wait-AnyKey
     return $true

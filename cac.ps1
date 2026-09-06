@@ -232,12 +232,14 @@ function Action-EnvCreate {
     $ed = Get-EnvDir $name
     if (Test-Path $ed) { Write-Err "环境 '$name' 已存在"; Wait-AnyKey; return }
     $rawProxy = Read-Input "  代理地址 (回车跳过)"
-    # Timezone is the whole point of this tool — don't let it silently default to UTC.
-    Write-Host "  时区应与你的代理出口地区一致，例如: Pacific/Honolulu  America/Los_Angeles  Asia/Tokyo  Asia/Taipei" -ForegroundColor DarkGray
+    # Timezone is the whole point of this tool. Enter = explicit default, never a silent UTC.
+    Write-Host "  时区应与你的代理出口地区一致。其他常用: America/Los_Angeles  Asia/Tokyo  Asia/Taipei" -ForegroundColor DarkGray
+    $tzDefault = "Pacific/Honolulu"
     $tzInput = ""
     while (-not $tzInput) {
-        $tzInput = (Read-Input "  时区 (必填)").Trim()
-        if ($tzInput -and $tzInput -notmatch '^[A-Za-z_]+(/[A-Za-z_+\-0-9]+)+$' -and $tzInput -ne "UTC") {
+        $tzInput = (Read-Input "  时区 [回车 = $tzDefault]").Trim()
+        if (-not $tzInput) { $tzInput = $tzDefault; break }
+        if ($tzInput -notmatch '^[A-Za-z_]+(/[A-Za-z_+\-0-9]+)+$' -and $tzInput -ne "UTC") {
             Write-Warn "格式看起来不对，应为 区域/城市，如 Pacific/Honolulu"
             $tzInput = ""
         }

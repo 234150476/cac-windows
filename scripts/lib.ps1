@@ -65,6 +65,52 @@ function Get-EnvDir {
     return Join-Path $ENVS_DIR $Name
 }
 
+# Ensure ~/.cac/bin sits BEFORE npm's dir in the user PATH so `claude` resolves
+# to our wrapper. Only rewrites when actually out of order — preserves existing
+# ordering otherwise. Returns $true if PATH was modified.
+function Ensure-CacInPath {
+    $binDir = (Join-Path $CAC_DIR "bin").TrimEnd("\")
+    $npmDir = (Join-Path $env:APPDATA "npm").TrimEnd("\")
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if (-not $userPath) { $userPath = "" }
+    $parts = [System.Collections.ArrayList]@()
+    foreach ($p in ($userPath -split ";")) { if ($p) { [void]$parts.Add($p) } }
+    $binIdx = -1; $npmIdx = -1
+    for ($i = 0; $i -lt $parts.Count; $i++) {
+        $t = $parts[$i].TrimEnd("\")
+        if ($binIdx -lt 0 -and $t -eq $binDir) { $binIdx = $i }
+        if ($npmIdx -lt 0 -and $t -eq $npmDir) { $npmIdx = $i }
+    }
+    # Already correct: bin present and (npm absent OR bin before npm)
+    if ($binIdx -ge 0 -and ($npmIdx -lt 0 -or $binIdx -lt $npmIdx)) { return $false }
+    # Drop any existing bin entry
+    $rest = [System.Collections.ArrayList]@()
+    foreach ($p in $parts) { if ($p.TrimEnd("\") -ne $binDir) { [void]$rest.Add($p) } }
+    # Find npm position in rest; insert bin right before it, else at front
+    $at = 0
+    for ($i = 0; $i -lt $rest.Count; $i++) { if ($rest[$i].TrimEnd("\") -eq $npmDir) { $at = $i; break } }
+    [void]$rest.Insert($at, $binDir)
+    [Environment]::SetEnvironmentVariable("PATH", ($rest -join ";"), "User")
+    return $true
+}
+
+# Which `claude` does a fresh shell actually run? Returns "wrapper", "npm", or "none".
+function Test-ClaudeResolution {
+    $binDir = Join-Path $CAC_DIR "bin"
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $machPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    foreach ($dir in (("$userPath;$machPath") -split ";")) {
+        if (-not $dir) { continue }
+        foreach ($n in @("claude.ps1", "claude.cmd", "claude.exe", "claude")) {
+            if (Test-Path (Join-Path $dir $n)) {
+                if ($dir.TrimEnd("\") -eq $binDir.TrimEnd("\")) { return "wrapper" }
+                return "npm"
+            }
+        }
+    }
+    return "none"
+}
+
 function Update-Statsig {
     param([string]$StableId)
     $d = Join-Path $env:USERPROFILE ".claude\statsig"

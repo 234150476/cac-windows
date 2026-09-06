@@ -43,14 +43,27 @@ function Do-Patch {
 function Do-Init {
     $realFile = Join-Path $CAC_DIR "real_claude"
     if (Test-Path $realFile) {
-        # 已初始化：静默同步 wrapper（cac-windows 升级后 wrapper 内容可能已变）
-        if (Write-Wrapper) { Write-Host "  wrapper 已更新" -ForegroundColor DarkGray; Start-Sleep -Milliseconds 600 }
+        # 已初始化：静默同步 wrapper 和 PATH（cac-windows 升级后内容可能已变）
+        $w = Write-Wrapper
+        $p = Ensure-CacInPath
+        if ($w) { Write-Host "  wrapper 已更新" -ForegroundColor DarkGray }
+        if ($p) { Write-Host "  PATH 已更新（重开终端后生效）" -ForegroundColor Yellow }
+        if ($w -or $p) { Start-Sleep -Milliseconds 800 }
         return $true
     }
     Write-Host ""
     Write-Host "  正在初始化..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Path $ENVS_DIR -Force | Out-Null
     $claude = Find-RealClaude
+    if (-not $claude) {
+        # npm package present but install.cjs never ran (allow-scripts policy)?
+        $ccInstall = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\install.cjs"
+        if (Test-Path $ccInstall) {
+            Write-Host "  运行 install.cjs 解包二进制..." -ForegroundColor Cyan
+            & node $ccInstall 2>&1 | ForEach-Object { Write-Host "  $_" }
+            $claude = Find-RealClaude
+        }
+    }
     if (-not $claude) {
         Write-Err "未找到 Claude Code"
         Write-Host "  请安装: npm i -g @anthropic-ai/claude-code@$SUPPORTED_CC" -ForegroundColor White
@@ -60,8 +73,11 @@ function Do-Init {
     Write-OK "Claude Code: $claude"
     Write-Wrapper | Out-Null
     Write-OK "Wrapper: $(Join-Path $CAC_DIR 'bin\claude.ps1')"
+    if (Ensure-CacInPath) { Write-OK "PATH: 已把 $(Join-Path $CAC_DIR 'bin') 加到最前（重开终端后生效）" }
+    else { Write-OK "PATH: 已包含 $(Join-Path $CAC_DIR 'bin')" }
     Do-Patch
     Write-Host ""
+    Wait-AnyKey
     return $true
 }
 
@@ -100,6 +116,13 @@ function Action-Launch {
 function Action-InstallAndPatch {
     Write-Host ""
     Write-Host "  将安装 Claude Code v$SUPPORTED_CC 并应用隐私补丁" -ForegroundColor Cyan
+    # claude.exe is locked while any claude session is running — patch would EBUSY
+    $running = @(Get-Process -Name claude -ErrorAction SilentlyContinue)
+    if ($running.Count -gt 0) {
+        Write-Err "检测到 $($running.Count) 个 Claude Code 进程正在运行"
+        Write-Host "  运行中无法替换/补丁 claude.exe，请先退出所有 claude 会话再试" -ForegroundColor White
+        Wait-AnyKey; return
+    }
     $confirm = Read-Input "  继续? (y/N)"
     if ($confirm -ne "y") { return }
     Write-Host "  正在安装..." -ForegroundColor Cyan
@@ -107,14 +130,20 @@ function Action-InstallAndPatch {
     $npmExit = $LASTEXITCODE
     $npmOutput | ForEach-Object { Write-Host "  $_" }
     if ($npmExit -ne 0) { Write-Err "安装失败"; Wait-AnyKey; return }
-    $claude = Find-RealClaude
-    if ($claude) {
-        Set-Content (Join-Path $CAC_DIR "real_claude") $claude
-        Write-Wrapper | Out-Null
+    # npm may skip install.cjs (allow-scripts policy) — run it so bin/claude.exe exists
+    $ccDir = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code"
+    $ccInstall = Join-Path $ccDir "install.cjs"
+    if (-not (Find-RealClaude) -and (Test-Path $ccInstall)) {
+        Write-Host "  运行 install.cjs 解包二进制..." -ForegroundColor Cyan
+        & node $ccInstall 2>&1 | ForEach-Object { Write-Host "  $_" }
     }
+    $claude = Find-RealClaude
+    if (-not $claude) { Write-Err "安装后未找到 claude.exe"; Wait-AnyKey; return }
+    Set-Content (Join-Path $CAC_DIR "real_claude") $claude
+    Write-Wrapper | Out-Null
     Do-Patch
     Reset-PatchCache
-    Write-OK "完成"
+    if (Test-Patched) { Write-OK "完成，补丁已应用" } else { Write-Warn "安装完成但补丁未应用（签名不匹配？）" }
     Wait-AnyKey
 }
 
@@ -147,12 +176,19 @@ function Action-EnvSwitch {
     $envs = @(Get-ChildItem $ENVS_DIR -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
     if ($envs.Count -eq 0) { Write-Warn "暂无环境"; Wait-AnyKey; return }
     $cur = Get-CurrentEnv
-    $labels = $envs | ForEach-Object { if ($_ -eq $cur) { "$_ (当前)" } else { $_ } }
+    $labels = @($envs | ForEach-Object { if ($_ -eq $cur) { "$_ (当前)" } else { $_ } })
     Write-Host "  选择环境:" -ForegroundColor White
     Write-Host ""
     $idx = Show-Menu $labels
     if ($idx -lt 0) { return }
     $name = $envs[$idx]
+    if ($name -eq $cur) { Write-Warn "已经是当前环境"; Wait-AnyKey; return }
+    # Switching env = switching identity. A running claude already holds the old identity.
+    $running = @(Get-Process -Name claude -ErrorAction SilentlyContinue)
+    if ($running.Count -gt 0) {
+        Write-Warn "有 $($running.Count) 个 Claude Code 会话正在运行，它们仍使用旧身份"
+        Write-Host "  切换后请重启这些会话，新身份才会生效" -ForegroundColor White
+    }
     Set-Content (Join-Path $CAC_DIR "current") $name
     $sid = Read-FileValue (Join-Path (Get-EnvDir $name) "stable_id")
     if ($sid) { Update-Statsig $sid }
@@ -273,7 +309,7 @@ function Menu-EnvManage {
         $envName = Get-CurrentEnv
         if ($envName) { $tz = Read-FileValue (Join-Path (Get-EnvDir $envName) "tz") } else { $tz = "" }
         $ccVer = Get-CcVersion
-        Show-Header $CAC_VERSION $envName $tz $ccVer ($ccVer -eq $SUPPORTED_CC) (Test-Patched)
+        Show-Header $CAC_VERSION $envName $tz $ccVer ($ccVer -eq $SUPPORTED_CC) (Test-Patched) (Test-ClaudeResolution)
         Write-Host "  [ 环境管理 ]" -ForegroundColor White
         Write-Host ""
         $opts = @(
@@ -308,7 +344,7 @@ while ($true) {
     $ccVer = Get-CcVersion
     $supported = $ccVer -eq $SUPPORTED_CC
     $patched = Test-Patched
-    Show-Header $CAC_VERSION $envName $tz $ccVer $supported $patched
+    Show-Header $CAC_VERSION $envName $tz $ccVer $supported $patched (Test-ClaudeResolution)
 
     $opts = @(
         "1. 启动 Claude Code"

@@ -4,16 +4,26 @@
 function Show-Menu {
     param([string[]]$Options, [int]$Default = 0)
     $sel = $Default
+    # Menu needs Options.Count + 2 lines below the cursor. If the cursor is near
+    # the bottom, the first Draw scrolls the buffer and $top becomes stale —
+    # subsequent redraws then paint over the wrong rows. Pre-scroll to be safe.
+    $need = $Options.Count + 2
+    $avail = [Console]::BufferHeight - [Console]::CursorTop
+    if ($avail -lt $need) {
+        for ($i = 0; $i -lt ($need - $avail); $i++) { Write-Host "" }
+        [Console]::SetCursorPosition(0, [Console]::CursorTop - ($need - $avail))
+    }
     $top = [Console]::CursorTop
+    $width = [Math]::Max(50, [Console]::WindowWidth - 1)
 
     function Draw {
         [Console]::SetCursorPosition(0, $top)
         for ($i = 0; $i -lt $Options.Count; $i++) {
             if ($i -eq $sel) { $line = "  > $($Options[$i])" } else { $line = "    $($Options[$i])" }
-            $pad = [Math]::Max(0, 50 - $line.Length)
+            if ($line.Length -gt $width) { $line = $line.Substring(0, $width) }
+            $pad = [Math]::Max(0, $width - $line.Length)
             if ($i -eq $sel) {
-                Write-Host "$line$(' ' * $pad)" -ForegroundColor Cyan -NoNewline
-                Write-Host ""
+                Write-Host "$line$(' ' * $pad)" -ForegroundColor Cyan
             } else {
                 Write-Host "$line$(' ' * $pad)"
             }
@@ -37,7 +47,7 @@ function Show-Menu {
 
 function Show-Header {
     param([string]$Version, [string]$EnvName, [string]$Tz,
-          [string]$CcVersion, [bool]$Supported, [bool]$Patched)
+          [string]$CcVersion, [bool]$Supported, [bool]$Patched, [string]$Resolution)
     Clear-Host
     Write-Host ""
     Write-Host "  cac-windows $Version" -ForegroundColor White
@@ -63,6 +73,11 @@ function Show-Header {
         Write-Host $ccLine -ForegroundColor $color
     } else {
         Write-Host "  Claude Code: 未安装" -ForegroundColor Red
+    }
+    switch ($Resolution) {
+        "wrapper" { Write-Host "  claude 命令: 走 cac (正常)" -ForegroundColor Green }
+        "npm"     { Write-Host "  claude 命令: 绕过 cac! 重开终端；仍不行请检查 PATH" -ForegroundColor Red }
+        "none"    { Write-Host "  claude 命令: PATH 中未找到" -ForegroundColor Red }
     }
     Write-Host ""
 }

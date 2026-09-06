@@ -70,7 +70,7 @@ function Update-Statsig {
     $d = Join-Path $env:USERPROFILE ".claude\statsig"
     if (-not (Test-Path $d)) { return }
     Get-ChildItem (Join-Path $d "statsig.stable_id.*") -ErrorAction SilentlyContinue | ForEach-Object {
-        Set-Content $_.FullName "`"$StableId`""
+        if ((Get-Content $_.FullName -Raw).Trim() -ne "`"$StableId`"") { Set-Content $_.FullName "`"$StableId`"" }
     }
 }
 
@@ -78,11 +78,16 @@ function Update-ClaudeJsonUserId {
     param([string]$UserId)
     $p = Join-Path $env:USERPROFILE ".claude.json"
     if (-not (Test-Path $p)) { return }
-    try {
-        $d = Get-Content $p -Raw | ConvertFrom-Json
-        $d.userID = $UserId
-        $d | ConvertTo-Json -Depth 10 | Set-Content $p -Encoding UTF8
-    } catch {}
+    # node instead of ConvertFrom-Json: PS is case-insensitive on keys and
+    # chokes on .claude.json "projects" paths that differ only by case.
+    # Script goes via a temp file — PS mangles quotes when passing -e inline.
+    $js = Join-Path $env:TEMP "cac-set-userid.js"
+    Set-Content $js @'
+const fs=require("fs"),p=process.argv[2],w=process.argv[3];
+const j=JSON.parse(fs.readFileSync(p,"utf8"));
+if(j.userID!==w){j.userID=w;fs.writeFileSync(p,JSON.stringify(j,null,2));}
+'@ -Encoding ASCII
+    & node $js $p $UserId 2>$null
 }
 
 function Write-Wrapper {
@@ -147,7 +152,7 @@ if (Test-Path $sf) {
     $sd = Join-Path $env:USERPROFILE ".claude\statsig"
     if (Test-Path $sd) {
         Get-ChildItem (Join-Path $sd "statsig.stable_id.*") -ErrorAction SilentlyContinue | ForEach-Object {
-            Set-Content $_.FullName "`"$sid`""
+            if ((Get-Content $_.FullName -Raw).Trim() -ne "`"$sid`"") { Set-Content $_.FullName "`"$sid`"" }
         }
     }
 }
@@ -155,11 +160,9 @@ $uf = Join-Path $ed "user_id"
 if (Test-Path $uf) {
     $cj = Join-Path $env:USERPROFILE ".claude.json"
     if (Test-Path $cj) {
-        try {
-            $jd = Get-Content $cj -Raw | ConvertFrom-Json
-            $jd.userID = (Get-Content $uf -Raw).Trim()
-            $jd | ConvertTo-Json -Depth 10 | Set-Content $cj -Encoding UTF8
-        } catch {}
+        $js = Join-Path $env:TEMP "cac-set-userid.js"
+        Set-Content $js 'const fs=require("fs"),p=process.argv[2],w=process.argv[3];const j=JSON.parse(fs.readFileSync(p,"utf8"));if(j.userID!==w){j.userID=w;fs.writeFileSync(p,JSON.stringify(j,null,2));}' -Encoding ASCII
+        & node $js $cj (Get-Content $uf -Raw).Trim() 2>$null
     }
 }
 $real = (Get-Content (Join-Path $d "real_claude") -Raw).Trim()

@@ -43,21 +43,41 @@ function Do-Patch {
 function Do-Init {
     $realFile = Join-Path $CAC_DIR "real_claude"
     if (Test-Path $realFile) {
-        # 已初始化：静默同步 wrapper 和 PATH（cac-windows 升级后内容可能已变）
+        # 已初始化：静默同步 wrapper / PATH / 补丁（cac-windows 升级后这些都可能过期，
+        # 且 npm allowScripts 可能拦掉了我们的 postinstall）
         $w = Write-Wrapper
         $p = Ensure-CacInPath
+        $patched = $false
+        if ((Get-CcVersion) -eq $SUPPORTED_CC -and -not (Test-Patched)) {
+            if (@(Get-Process -Name claude -ErrorAction SilentlyContinue).Count -eq 0) {
+                Write-Host "  检测到补丁未应用，正在补丁..." -ForegroundColor Cyan
+                Do-Patch
+                Reset-PatchCache
+                $patched = Test-Patched
+            } else {
+                Write-Host "  补丁未应用，但有 claude 在运行，退出后再打开 cac 会自动补丁" -ForegroundColor Yellow
+            }
+        }
         if ($w) { Write-Host "  wrapper 已更新" -ForegroundColor DarkGray }
         if ($p) { Write-Host "  PATH 已更新（重开终端后生效）" -ForegroundColor Yellow }
-        if ($w -or $p) { Start-Sleep -Milliseconds 800 }
+        if ($patched) { Write-Host "  补丁已应用" -ForegroundColor Green }
+        if ($w -or $p -or $patched) { Start-Sleep -Milliseconds 1200 }
         return $true
     }
     Write-Host ""
     Write-Host "  正在初始化..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Path $ENVS_DIR -Force | Out-Null
+    $ccDir = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code"
     $claude = Find-RealClaude
+    if (-not $claude -and -not (Test-Path (Join-Path $ccDir "package.json"))) {
+        # Not installed at all (postinstall may have been blocked by npm allowScripts)
+        Write-Host "  未找到 Claude Code，正在安装 v$SUPPORTED_CC（约 200MB，请稍候）..." -ForegroundColor Cyan
+        & npm install -g "@anthropic-ai/claude-code@$SUPPORTED_CC" --registry https://registry.npmjs.org 2>&1 | ForEach-Object { Write-Host "  $_" }
+        $claude = Find-RealClaude
+    }
     if (-not $claude) {
         # npm package present but install.cjs never ran (allow-scripts policy)?
-        $ccInstall = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\install.cjs"
+        $ccInstall = Join-Path $ccDir "install.cjs"
         if (Test-Path $ccInstall) {
             Write-Host "  运行 install.cjs 解包二进制..." -ForegroundColor Cyan
             & node $ccInstall 2>&1 | ForEach-Object { Write-Host "  $_" }
@@ -66,7 +86,7 @@ function Do-Init {
     }
     if (-not $claude) {
         Write-Err "未找到 Claude Code"
-        Write-Host "  请安装: npm i -g @anthropic-ai/claude-code@$SUPPORTED_CC" -ForegroundColor White
+        Write-Host "  请手动安装: npm i -g @anthropic-ai/claude-code@$SUPPORTED_CC" -ForegroundColor White
         Wait-AnyKey; return $false
     }
     Set-Content $realFile $claude
@@ -76,6 +96,8 @@ function Do-Init {
     if (Ensure-CacInPath) { Write-OK "PATH: 已把 $(Join-Path $CAC_DIR 'bin') 加到最前（重开终端后生效）" }
     else { Write-OK "PATH: 已包含 $(Join-Path $CAC_DIR 'bin')" }
     Do-Patch
+    Reset-PatchCache
+    if (Test-Patched) { Write-OK "补丁: 已应用" } else { Write-Warn "补丁: 未应用（版本 $(Get-CcVersion) 与支持的 $SUPPORTED_CC 不一致？）" }
     Write-Host ""
     Wait-AnyKey
     return $true

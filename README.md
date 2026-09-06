@@ -22,15 +22,14 @@ Claude Code 的 Windows 隐私保护工具 — 二进制补丁抹除中国特征
 
 ```powershell
 npm i -g cac-windows --registry https://registry.npmjs.org --force
-```
-
-## 快速开始
-
-```powershell
 cac
 ```
 
-首次运行自动完成初始化：定位 claude.exe、生成 wrapper、把 `%USERPROFILE%\.cac\bin` 加到用户 PATH 最前、应用补丁。之后进入菜单：
+> 新版 npm 默认拦截第三方包的安装脚本（会看到 `install scripts not yet covered by allowScripts` 警告），所以补丁不会在 `npm i` 阶段自动完成——**装完必须运行一次 `cac`**，由它来打补丁、设 PATH。之后每次打开 `cac` 都会自动检查并补齐缺失的补丁。
+
+## 快速开始
+
+`cac` 首次运行自动完成初始化：定位 claude.exe（未安装则自动安装 2.1.263）、生成 wrapper、把 `%USERPROFILE%\.cac\bin` 加到用户 PATH 最前、应用补丁。之后进入菜单：
 
 ```
 1. 启动 Claude Code

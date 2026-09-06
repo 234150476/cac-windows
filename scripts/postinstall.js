@@ -111,9 +111,14 @@ if (process.platform === 'win32') {
   } catch (e) { /* non-fatal */ }
 
   // Step 3: Apply TZ + privacy patches (single source of truth: scripts/patch-cli.js)
+  // Skipped if claude is running (binary locked → EBUSY); `cac` will patch on next launch.
   try {
     var patchScript = path.join(__dirname, 'patch-cli.js');
-    if (fs.existsSync(patchScript)) {
+    var tl = spawnSync('tasklist', ['/FI', 'IMAGENAME eq claude.exe', '/NH'], { encoding: 'utf8', timeout: 10000 });
+    var claudeRunning = tl.stdout && /claude\.exe/i.test(tl.stdout);
+    if (claudeRunning) {
+      console.log('  Claude Code is running — skipping patch. Run `cac` after closing it to patch.');
+    } else if (fs.existsSync(patchScript)) {
       spawnSync(process.execPath, [patchScript, ccDir], { stdio: 'inherit', timeout: 120000 });
     }
   } catch (e) {
@@ -124,24 +129,9 @@ if (process.platform === 'win32') {
 var quickStart = [
   '',
   '  cac-windows installed successfully',
+  '',
+  '  Next: run  cac  — it patches Claude Code, sets PATH, and opens the menu.',
+  '  Then open a NEW terminal and type  claude',
   ''
 ];
-if (process.platform === 'win32') {
-  quickStart.push(
-    '  Quick start:',
-    '    cac                                   Launch menu',
-    '    claude                                Start Claude Code'
-  );
-} else {
-  quickStart.push(
-    '  Quick start:',
-    '    cac                                   Launch menu',
-    '    claude                                Start Claude Code'
-  );
-}
-quickStart.push(
-  '',
-  '  Docs: https://cac.nextmind.space/docs',
-  ''
-);
 console.log(quickStart.join('\n'));

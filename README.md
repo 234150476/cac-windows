@@ -25,7 +25,12 @@ npm i -g cac-windows --registry https://registry.npmjs.org --force
 cac
 ```
 
-> 新版 npm 默认拦截第三方包的安装脚本（会看到 `install scripts not yet covered by allowScripts` 警告），所以补丁不会在 `npm i` 阶段自动完成——**装完必须运行一次 `cac`**，由它来打补丁、设 PATH。之后每次打开 `cac` 都会自动检查并补齐缺失的补丁。
+> 新版 npm（11+）默认拦截安装脚本，会看到 `install scripts not yet covered by allowScripts` 警告——这是正常的。包已经装好了，只是补丁没在 `npm i` 阶段完成。**装完运行一次 `cac`** 即可，它会解包 Claude Code 二进制、打补丁、设 PATH。
+>
+> 如果想让 npm 直接放行（可选）：
+> ```powershell
+> npm i -g cac-windows --allow-scripts=cac-windows,@anthropic-ai/claude-code --registry https://registry.npmjs.org --force
+> ```
 
 ## 快速开始
 

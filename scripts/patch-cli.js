@@ -6,23 +6,23 @@ const ccDir = process.argv[2] || path.join(process.env.APPDATA, "npm", "node_mod
 const TZ_MARKER = 'Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)   ';
 const PRIVACY_MARKER = '=process.env.TZ||"UTC"   ';
 
-// 2.1.263 signatures — minified names change every release, re-extract with find-sigs.js
+// 2.1.294 signatures — minified names change every release, re-extract with find-sigs.js
 const tzPats = [
-  ['function kSt(){let e=new Date,t=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),o=String(e.getDate()).padStart(2,"0");return`${t}-${r}-${o}`}',
-   'function kSt(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                }'],
+  ['function Ano(){let e=new Date,t=Rno();if(t!==void 0){let s=new Map(R4("en-US",{timeZone:t,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(e).map((c)=>[c.type,c.value]));return`${s.get("year")}-${s.get("month")}-${s.get("day")}`}let n=e.getFullYear(),r=String(e.getMonth()+1).padStart(2,"0"),p=String(e.getDate()).padStart(2,"0");return`${n}-${r}-${p}`}',
+   'function Ano(){return new Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)                                                                                                                                                                                                                                                                       }'],
 ];
 
 const privacyPats = [
-  ['function sIn(){if(!u)u=Intl.DateTimeFormat().resolvedOptions().timeZone;return u}',
-   'function sIn(){if(!u)u=process.env.TZ||"UTC"                           ;return u}'],
-  ['function Wlr(){if(a===null)try{let e=Intl.DateTimeFormat().resolvedOptions().locale;a=new Intl.Locale(e).language}catch{a=void 0}return a}',
-   'function Wlr(){if(a===null)a="en";                                                                                               return a}'],
-  ['let _=Intl.DateTimeFormat().resolvedOptions().timeZone',
-   'let _=process.env.TZ||"UTC"                           '],
+  ['function y_o(){if(!g)g=Intl.DateTimeFormat().resolvedOptions().timeZone;return g}',
+   'function y_o(){if(!g)g=process.env.TZ||"UTC"                           ;return g}'],
+  ['function hSs(){if(l===null)try{let e=Intl.DateTimeFormat().resolvedOptions().locale;l=new Intl.Locale(e).language}catch{l=void 0}return l}',
+   'function hSs(){if(l===null)l="en";                                                                                               return l}'],
+  ['let A=Intl.DateTimeFormat().resolvedOptions().timeZone',
+   'let A=process.env.TZ||"UTC"                           '],
   ['.toLocaleDateString(void 0,{year:"numeric",month:"short",day:"numeric"})',
    '.toLocaleDateString( "en" ,{year:"numeric",month:"short",day:"numeric"})'],
-  ['Te=-fe.getTimezoneOffset(),xe=Math.floor(Math.abs(Te)/60),De=Math.abs(Te)%60,Ve=`${Te>=0?"+":"-"}${String(xe).padStart(2,"0")}:${String(De).padStart(2,"0")}`',
-   'Te=0                                                                                                                                   ,xe=0,De=0,Ve="+00:00"'],
+  ['Se=-Q.getTimezoneOffset(),Me=Math.floor(Math.abs(Se)/60),Ie=Math.abs(Se)%60,Fe=`${Se>=0?"+":"-"}${String(Me).padStart(2,"0")}:${String(Ie).padStart(2,"0")}`',
+   'Se=0                                                                                                                                  ,Me=0,Ie=0,Fe="+00:00"'],
 ];
 
 const binDir = path.join(ccDir, "bin");

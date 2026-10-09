@@ -1,8 +1,8 @@
 ﻿#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$CAC_VERSION = "1.0.26"
-$SUPPORTED_CC = "2.1.263"
+$CAC_VERSION = "1.0.27"
+$SUPPORTED_CC = "2.1.294"
 
 $scriptDir = Split-Path $MyInvocation.MyCommand.Definition -Parent
 . (Join-Path $scriptDir "scripts\lib.ps1")

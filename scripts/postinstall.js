@@ -64,7 +64,7 @@ if (process.platform === 'win32') {
 //   2. Claude Code wrong version → reinstall pinned version
 //   3. install.cjs not run (allow-scripts blocked) → run it
 //   4. TZ patch not applied → apply it
-var SUPPORTED_CLAUDE_VERSION = '2.1.263';
+var SUPPORTED_CLAUDE_VERSION = '2.1.294';
 var CC_PKG = '@anthropic-ai/claude-code';
 if (process.platform === 'win32') {
   var spawnSync = require('child_process').spawnSync;

@@ -6,7 +6,7 @@ const ccDir = process.argv[2] || path.join(process.env.APPDATA, "npm", "node_mod
 const TZ_MARKER = 'Intl.DateTimeFormat("sv",{timeZone:process.env.TZ||"UTC"}).format(new Date)   ';
 const PRIVACY_MARKER = '=process.env.TZ||"UTC"   ';
 const BOOT_MARKER = 'Date.prototype[m]=function(l,o){return f.call(this,l||"en",o)}';
-const FUSE_MARKER = 'async function o(){return CAC_MID;';
+const FUSE_MARKER = 'return process.env.CAC_MACHINE_ID;';
 
 // Same-length replacement: head + spaces + tail. Spaces are computed, never hand-typed.
 // `at` is the 0-based occurrence of `orig` to target (default: first). Needed because the

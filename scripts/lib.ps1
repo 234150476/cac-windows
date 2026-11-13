@@ -164,6 +164,12 @@ if exist "!ENV_DIR!\lang" (
     for /f "usebackq delims=" %%i in ("!ENV_DIR!\lang") do set "LANG=%%i"
 )
 set "BUN_JSC_useCodeCache=false"
+if exist "!ENV_DIR!\hostname" (
+    for /f "usebackq delims=" %%i in ("!ENV_DIR!\hostname") do set "CAC_HOSTNAME=%%i"
+)
+if exist "!ENV_DIR!\machine_id" (
+    for /f "usebackq delims=" %%i in ("!ENV_DIR!\machine_id") do set "CAC_MACHINE_ID=%%i"
+)
 if exist "!ENV_DIR!\stable_id" (
     for /f "usebackq delims=" %%i in ("!ENV_DIR!\stable_id") do set "STABLE_ID=%%i"
     for %%f in ("%USERPROFILE%\.claude\statsig\statsig.stable_id.*") do (
@@ -195,6 +201,10 @@ $lf = Join-Path $ed "lang"
 if (Test-Path $lf) { $env:LANG = (Get-Content $lf -Raw).Trim() } else { $env:LANG = "en_US.UTF-8" }
 # claude.exe ships precompiled JSC bytecode; without this the patched JS source is never executed
 $env:BUN_JSC_useCodeCache = "false"
+$hf = Join-Path $ed "hostname"
+if (Test-Path $hf) { $env:CAC_HOSTNAME = (Get-Content $hf -Raw).Trim() }
+$mf = Join-Path $ed "machine_id"
+if (Test-Path $mf) { $env:CAC_MACHINE_ID = (Get-Content $mf -Raw).Trim() }
 $sf = Join-Path $ed "stable_id"
 if (Test-Path $sf) {
     $sid = (Get-Content $sf -Raw).Trim()

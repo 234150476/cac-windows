@@ -16,7 +16,7 @@ Claude Code 的 Windows 隐私保护工具 — 二进制补丁抹除中国特征
 - Windows 10 / 11
 - Node.js ≥ 14
 - PowerShell 5.1（系统自带）或 PowerShell 7（推荐）
-- Claude Code 2.1.263（`npm i -g @anthropic-ai/claude-code@2.1.263`，或在 cac 菜单里一键安装）
+- Claude Code 2.1.322（`npm i -g @anthropic-ai/claude-code@2.1.322`，或在 cac 菜单里一键安装）
 
 ## 安装
 
@@ -34,7 +34,7 @@ cac
 
 ## 快速开始
 
-`cac` 首次运行自动完成初始化：定位 claude.exe（未安装则自动安装 2.1.263）、生成 wrapper、把 `%USERPROFILE%\.cac\bin` 加到用户 PATH 中 npm 目录之前、应用补丁。之后进入菜单：
+`cac` 首次运行自动完成初始化：定位 claude.exe（未安装则自动安装 2.1.322）、生成 wrapper、把 `%USERPROFILE%\.cac\bin` 加到用户 PATH 中 npm 目录之前、应用补丁。之后进入菜单：
 
 ```
 1. 启动 Claude Code
@@ -63,7 +63,7 @@ cac
 | 日期格式化 locale | toLocaleDateString → 固定 "en" |
 | 语言环境变量 | LANG = en_US.UTF-8 |
 
-补丁签名与 Claude Code 版本绑定，当前支持 2.1.263。新版本发布后需要重新提取签名。
+补丁签名与 Claude Code 版本绑定，当前支持 2.1.322。新版本发布后需要重新提取签名。
 
 > **为什么必须通过 `claude` wrapper（或 cac 菜单）启动？** claude.exe 是 Bun 打包的单文件程序，内置了预编译的 JSC 字节码。默认情况下运行时直接执行字节码，**内嵌的 JS 源码根本不会被读取，补丁等于没打**。wrapper 启动时会设置 `BUN_JSC_useCodeCache=false`，强制 Bun 放弃字节码、回退到（已打补丁的）源码执行。代价是启动慢约 0.3 秒。直接双击或用绝对路径运行 claude.exe 不会带上这个变量，补丁不生效。
 

@@ -1,5 +1,5 @@
-﻿# cac-windows 1.0.26 虚拟机验收脚本
-# 用法：把 cac-windows-1.0.26.tgz 和本文件放到同一目录，在该目录打开 PowerShell，运行：
+﻿# cac-windows 1.0.28 虚拟机验收脚本
+# 用法：把 cac-windows-1.0.28.tgz 和本文件放到同一目录，在该目录打开 PowerShell，运行：
 #   powershell -ExecutionPolicy Bypass -File .\vm-test.ps1
 # 前提：VM 已装 Node.js；不需要预装 Claude Code（脚本会验证 cac 自动安装）
 $ErrorActionPreference = "Stop"
@@ -10,7 +10,7 @@ function Pass($t) { Write-Host "  PASS  $t" -ForegroundColor Green }
 function Fail($t) { Write-Host "  FAIL  $t" -ForegroundColor Red; $script:failed = $true }
 $script:failed = $false
 
-$tgz = Join-Path $PSScriptRoot "cac-windows-1.0.26.tgz"
+$tgz = Join-Path $PSScriptRoot "cac-windows-1.0.28.tgz"
 if (-not (Test-Path $tgz)) { Fail "找不到 $tgz"; exit 1 }
 
 Step "1. 安装 cac-windows（本地 tgz）"
@@ -19,9 +19,9 @@ cmd /c "npm i -g `"$tgz`" --force 2>&1" | ForEach-Object { "  $_" }
 $cacCmd = Join-Path $env:APPDATA "npm\cac.cmd"
 if (Test-Path $cacCmd) { Pass "cac.cmd 已生成" } else { Fail "cac.cmd 未生成"; exit 1 }
 
-Step "2. 首次运行 cac（自动安装 Claude Code 2.1.263 + 打补丁 + 设 PATH）"
+Step "2. 首次运行 cac（自动安装 Claude Code 2.1.322 + 打补丁 + 设 PATH）"
 Write-Host "  cac 会进入菜单。看到菜单后按 Esc 或选 0 退出，脚本继续。" -ForegroundColor Yellow
-Write-Host "  头部应显示: Claude Code 2.1.263 / 补丁: 已应用 / claude 命令: 走 cac" -ForegroundColor Yellow
+Write-Host "  头部应显示: Claude Code 2.1.322 / 补丁: 已应用 / claude 命令: 走 cac" -ForegroundColor Yellow
 Write-Host "  按任意键开始..." -ForegroundColor Yellow
 [void][Console]::ReadKey($true)
 & $cacCmd
@@ -30,12 +30,12 @@ Step "3. 检查安装结果"
 $ccDir = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code"
 $exe = Join-Path $ccDir "bin\claude.exe"
 $ver = (Get-Content (Join-Path $ccDir "package.json") -Raw | ConvertFrom-Json).version
-if ($ver -eq "2.1.263") { Pass "Claude Code 版本 $ver" } else { Fail "Claude Code 版本 $ver，应为 2.1.263" }
+if ($ver -eq "2.1.322") { Pass "Claude Code 版本 $ver" } else { Fail "Claude Code 版本 $ver，应为 2.1.322" }
 if (Test-Path $exe) { Pass "claude.exe 存在" } else { Fail "claude.exe 不存在"; exit 1 }
 $bytes = [System.IO.File]::ReadAllBytes($exe)
 $text = [System.Text.Encoding]::GetEncoding("iso-8859-1").GetString($bytes)
 if ($text.Contains('=process.env.TZ||"UTC"   ')) { Pass "二进制含补丁标记" } else { Fail "二进制无补丁标记" }
-if ($text.Contains('function kSt(){return new Intl.DateTimeFormat("sv"')) { Pass "日期函数已替换" } else { Fail "日期函数未替换" }
+if ($text.Contains('function uPs(){return new Intl.DateTimeFormat("sv"')) { Pass "日期函数已替换" } else { Fail "日期函数未替换" }
 $real = Join-Path $env:USERPROFILE ".cac\real_claude"
 if (Test-Path $real) { Pass "real_claude = $((Get-Content $real -Raw).Trim())" } else { Fail "real_claude 未写入" }
 $wrapPs1 = Join-Path $env:USERPROFILE ".cac\bin\claude.ps1"
